@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <math.h>
+#include <time.h>
 #ifdef USEGLEW
 #include <GL/glew.h>
 #endif
@@ -61,7 +62,12 @@ unsigned int ID;
 
 growArr triangles;
 
+int nBalls = 7;
 ball *balls = NULL;
+
+int mode = 0;
+
+void genTriangles();
 
 /*
  *  Copied from example code (ex6.c)
@@ -105,10 +111,77 @@ void Fatal(const char* format , ...)
    exit(1);
 }
 
+void dodecahedron() {
+    double phi = (1 + sqrt(5)) / 2;
+    double coords[] = {
+        1, 1, 1,
+        1, 1, -1,
+        1, -1, 1,
+        1, -1, -1,
+        -1, 1, 1,
+        -1, 1, -1,
+        -1, -1, 1,
+        -1, -1, -1,
+        0, phi, 1/phi,
+        0, phi, -1/phi,
+        0, -phi, 1/phi,
+        0, -phi, -1/phi,
+        1/phi, 0, phi,
+        1/phi, 0, -phi,
+        -1/phi, 0, phi,
+        -1/phi, 0, -phi,
+        phi, 1/phi, 0,
+        phi, -1/phi, 0,
+        -phi, 1/phi, 0,
+        -phi, -1/phi, 0
+    };
+    char faces[] = {
+        0, 1, 16, 0, 1, 8, 1, 8, 9,
+        1, 3, 13, 1, 3, 16, 3, 16, 17,
+        3, 2, 17, 3, 2, 10, 3, 10, 11,
+        2, 0, 12, 2, 0, 16, 2, 16, 17,
+        4, 5, 18, 4, 5, 8, 5, 8, 9,
+        5, 7, 15, 5, 7, 18, 7, 18, 19,
+        7, 6, 19, 7, 6, 11, 6, 11, 10,
+        6, 4, 14, 6, 4, 18, 6, 18, 19,
+        0, 4, 8, 0, 4, 12, 4, 12, 14,
+        1, 5, 9, 1, 5, 13, 5, 13, 15,
+        2, 6, 10, 2, 6, 14, 2, 14, 12,
+        3, 7, 11, 3, 7, 15, 3, 15, 13
+    };
+    // colors from ex6.c
+    float colors[] = {
+        0.0,0.0,1.0,
+        0.0,1.0,0.0,
+        0.0,1.0,1.0,
+        1.0,0.0,0.0,
+        1.0,0.0,1.0,
+        1.0,1.0,0.0,
+        0.0,0.0,1.0,
+        0.0,1.0,0.0,
+        0.0,1.0,1.0,
+        1.0,0.0,0.0,
+        1.0,0.0,1.0,
+        1.0,1.0,0.0,
+    };
+ 
+
+    glVertexPointer(3, GL_DOUBLE, 0, coords);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glColorPointer(3, GL_FLOAT, 0, colors);
+    glEnableClientState(GL_COLOR_ARRAY);
+    /*glIndexPointer(GL_INT, 0, faces);
+    glEnableClientState(GL_INDEX_ARRAY);*/
+    glColor3f(1.0, 1.0, 1.0);
+    glDrawElements(GL_TRIANGLES, 108, GL_UNSIGNED_BYTE, faces);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+}
+
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_GREATER);
+    glDepthFunc(GL_LESS);
     glLoadIdentity();
 
     // we need to translate before rotating so that rotating doesn't also rotate the direction of translation
@@ -119,24 +192,42 @@ void display() {
     double *rot = toMat4(rotation);
     glMultMatrixd(rot);
     free(rot);
-    //*
-    float *matrix = calloc(16, sizeof(float));
-    glUseProgram(ID);
-    glGetFloatv(GL_MODELVIEW_MATRIX, matrix);
-    glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, matrix);
-    glGetFloatv(GL_PROJECTION_MATRIX, matrix);
-    glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, matrix);
-    ErrCheck("display1");
-    free(matrix);//*/
+    
+    if (mode == 0) {
+        float *matrix = calloc(16, sizeof(float));
+        glUseProgram(ID);
+        glGetFloatv(GL_MODELVIEW_MATRIX, matrix);
+        glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, matrix);
+        glGetFloatv(GL_PROJECTION_MATRIX, matrix);
+        glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, matrix);
+        ErrCheck("display1");
+        free(matrix);
 
-    glVertexPointer(3, GL_FLOAT, 0, triangles.data);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+        glVertexPointer(3, GL_FLOAT, 0, triangles.data);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-    glDrawArrays(GL_TRIANGLES, 0, triangles.size / 3);
+        glDrawArrays(GL_TRIANGLES, 0, triangles.size / 3);
 
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glUseProgram(0);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glUseProgram(0);
+    } else {
+        glPushMatrix();
+        glRotated(12, 1, 0, 3);
+        glScaled(1.5, 1.5, 1.5);
+        dodecahedron();
+        glPopMatrix();
+        glPushMatrix();
+        glTranslated(6, 2, 1);
+        glRotated(20, 0, -2, 1);
+        dodecahedron();
+        glPopMatrix();
+        glPushMatrix();
+        glScaled(3, 3, 3);
+        glTranslated(-5, -5, 3);
+        dodecahedron();
+        glPopMatrix();
+    }
 
     double gridSize = dim / 10;
     double offset = 2 * (dim / dimInit);
@@ -167,25 +258,12 @@ void display() {
     glLineWidth(1);
     glColor3f(1.0, 1.0, 1.0);
 
+    glLoadIdentity();
+
     glWindowPos2i(5, 5);
-    Print("hi");
 
     glFlush();
     glutSwapBuffers();
-}
-
-void special(int key, int x, int y) {}
-
-void key(unsigned char key, int x, int y) {
-    if (key == 'd') {
-        double *matrix = calloc(16, sizeof(double));
-        glGetDoublev(GL_MODELVIEW_MATRIX, matrix);
-        for (int i = 0; i < 16; i++) {
-            printf("%f ", matrix[i]);
-        }
-        printf("\n");
-        free(matrix);
-    }
 }
 
 void mouse(int button, int up, int x, int y) {
@@ -221,7 +299,7 @@ void motion(int x, int y) {
     int shouldRedisplay = 0;
     if (down[GLUT_LEFT_BUTTON]) {
         // left mouse button - rotate the attractor around its origin
-        quat temp_rot = fromEuler(-adY, -adX, 0);
+        quat temp_rot = fromEuler(adY, adX, 0);
         rotation = multiply(temp_rot, rotation);
         shouldRedisplay = 1;
     }
@@ -239,6 +317,13 @@ void motion(int x, int y) {
 
 void entry(int state) {
     isInside = state;
+}
+
+void key(unsigned char key, int x, int y) {
+    if (key == 'm') {
+        mode = !mode;
+        glutPostRedisplay();
+    }
 }
 
 /*
@@ -269,35 +354,7 @@ void reshape(int w,int h) {
     glLoadIdentity();
 }
 
-// the main function is mostly copied from the example code (likely ex6.c)
-// but I've added other functions as needed
-int main(int argc, char* argv[]) {
-    // initialize everything
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
-    glutInitWindowSize(width, height);
-    glutCreateWindow("Isaac Mitchell");
-#ifdef USEGLEW
-    if (glewInit() != GLEW_OK) Fatal("Error initializing GLEW\n");
-#endif
-    // event handlers for all of the different events I used
-    glutDisplayFunc(display);
-    glutReshapeFunc(reshape);
-    glutSpecialFunc(special);
-    glutKeyboardFunc(key);
-    glutMouseFunc(mouse);
-    glutMotionFunc(motion);
-    glutEntryFunc(entry);
-    triangles = createArr();
-    int nBalls = 4;
-    balls = calloc(nBalls, sizeof(ball));
-    balls[0].influence = 5;
-    balls[1].pos.x = 3.5;
-    balls[1].influence = 2;
-    balls[2].pos.y = 2.5;
-    balls[2].influence = 4;
-    balls[3].pos.z = 1;
-    balls[3].influence = -1;
+void genTriangles() {
     vec3f min, max;
     maxArea(balls, 1, &max, &min);
     vec3f areasize = sub(max, min);
@@ -339,13 +396,53 @@ int main(int argc, char* argv[]) {
                         influence[n + 1 + (int)areasize.x + (int)(areasize.x * areasize.y)], influence[n + (int)areasize.x + (int)(areasize.x * areasize.y)],
                     }, pos, (float)precision};
                     n++;
-                    triangles = march(cell, triangles, 4);
+                    triangles = march(cell, triangles, 1);
                 }
             }
         }
     }
     free(influence);
-    printf("%i\n", triangles.size);
+    //printf("%i\n", triangles.size);
+}
+
+// the main function is mostly copied from the example code (likely ex6.c)
+// but I've added other functions as needed
+int main(int argc, char* argv[]) {
+    // initialize everything
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+    glutInitWindowSize(width, height);
+    glutCreateWindow("Isaac Mitchell");
+#ifdef USEGLEW
+    if (glewInit() != GLEW_OK) Fatal("Error initializing GLEW\n");
+#endif
+    // event handlers for all of the different events I used
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
+    glutMouseFunc(mouse);
+    glutMotionFunc(motion);
+    glutEntryFunc(entry);
+    glutKeyboardFunc(key);
+    srand(time(NULL));
+    triangles = createArr();
+    balls = calloc(nBalls, sizeof(ball));
+    balls[0].influence = 5;
+    balls[1].pos.x = 3.5;
+    balls[1].influence = 2;
+    balls[2].pos.y = 2.5;
+    balls[2].influence = 4;
+    balls[3].pos.z = 1;
+    balls[3].influence = -1.5;
+    balls[4].pos.x = 3;
+    balls[4].pos.y = 2;
+    balls[4].pos.z = 1;
+    balls[4].influence = 5;
+    balls[5].pos.x = -4;
+    balls[5].influence = 5;
+    balls[6].pos.x = -3;
+    balls[6].pos.z = 1;
+    balls[6].influence = 1;
+    genTriangles();
     ID = createProgram("vert.vert", "frag.frag", 1);
     glutMainLoop();
     return 0;

@@ -1,6 +1,7 @@
 #include "vec3.h"
 #include "arr.h"
 #include "march.h"
+#include <math.h>
 // marching cubes concept and code (i.e. this entire file) slightly adapted from
 // https://graphics.stanford.edu/~mdfisher/Code/MarchingCubes/MarchingCubes.cpp.html
 static const char triTable[256][16] = {
@@ -364,6 +365,9 @@ growArr march(marchData cell, growArr triangles, float threshhold) {
         temp = vertexList[(int)tris[i]];
         temp1 = vertexList[(int)tris[i + 1]];
         temp2 = vertexList[(int)tris[i + 2]];
+        if (isnan(temp.x) || isnan(temp1.x) || isnan(temp2.x)
+         || isnan(temp.y) || isnan(temp1.y) || isnan(temp2.y)
+         || isnan(temp.z) || isnan(temp1.z) || isnan(temp2.z)) continue;
         triangles = pushMultiple(triangles, 9,
             temp.x, temp.y, temp.z,
             temp1.x, temp1.y, temp1.z,

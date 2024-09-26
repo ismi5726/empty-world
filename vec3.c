@@ -21,5 +21,9 @@ vec3f sub(vec3f a, vec3f b) {
 }
 
 vec3f interpolate(vec3f a, vec3f b, float _a, float _b) {
+    if (_a == _b) {
+        _b = 3;
+        _a = 1;
+    }
     return add(a, scalef(sub(b, a), -_a / (_b - _a)));
 }
