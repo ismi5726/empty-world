@@ -10,3 +10,5 @@ growArr createArr();
 growArr _expand(growArr);
 growArr push(growArr, float);
 growArr pushMultiple(growArr, int, ...);
+void delArr(growArr);
+growArr clear(growArr);

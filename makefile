@@ -1,5 +1,5 @@
 # makefile copied almost entirely in whole from the ex14 makefile
-EXE=hw3
+EXE=hw4
 
 # Main target
 all: $(EXE)
@@ -26,16 +26,19 @@ CLEAN=rm -f $(EXE) *.o *.a
 endif
 
 # Dependencies
-hw3.o: hw3.c arr.h ball.h march.h quat.h vec3.h shaders.h
+hw4.o: hw4.c arr.h ball.h cell.h funcs.h march.h quat.h vec3.h shaders.h
 arr.o: arr.c arr.h
 ball.o: ball.c ball.h vec3.h
+cell.o: cell.c arr.h cell.h funcs.h march.h vec3.h
+funcs.o: funcs.c funcs.h
 march.o: march.c march.h arr.h vec3.h
 quat.o: quat.c quat.h
+queue.o: queue.c queue.h
 shaders.o: shaders.c shaders.h
 vec3.o: vec3.c vec3.h
 
 #  Create archive
-dep.a:arr.o ball.o march.o quat.o shaders.o vec3.o
+dep.a:arr.o ball.o cell.o funcs.o march.o quat.o queue.o shaders.o vec3.o
 		ar -rcs $@ $^
 
 # Compile rules
@@ -45,7 +48,7 @@ dep.a:arr.o ball.o march.o quat.o shaders.o vec3.o
 		g++ -c $(CFLG)  $<
 
 #  Link
-hw3:hw3.o   dep.a
+hw4:hw4.o   dep.a
 		gcc $(CFLG) -o $@ $^  $(LIBS)
 
 #  Clean

@@ -22,11 +22,14 @@
 #define LEN 8192  // Maximum length of text string
 
 #include "quat.h"
-#include "ball.h"
+//#include "ball.h"
 #include "march.h"
 #include "arr.h"
 #include "vec3.h"
 #include "shaders.h"
+#include "cell.h"
+#include "funcs.h"
+#include "queue.h"
 
 
 // total rotation
@@ -60,7 +63,7 @@ vec3f velocity = {0, 0, 0};
 vec3f acceleration = {0, 0, 0};
 vec3f vZero = {0, 0, 0};
 int onFloor = 0;
-double phi = -PI / 2;
+double phi = 0;
 double theta = 0;
 
 double dim = 30;
@@ -79,11 +82,18 @@ int height = 500;
 
 unsigned int ID;
 
-growArr triangles;
+/*growArr triangles;
 
 int nBalls = 7;
 ball *balls = NULL;
-double threshhold = 1;
+double threshhold = 1;*/
+
+funcDef terrain;
+
+vec3f cellSize = {16, 16, 16};
+cell *corner;
+int lodCutoffs[4] = {20, 10, 5, 2};
+int renderDistance = 25;
 
 int mode = 0;
 int perspective = 0;
@@ -94,7 +104,7 @@ int oldT = 0;
 
 char state[][20] = {"Ortho", "Perspective", "Walking (outside)", "Walking (inside)"};
 
-void genTriangles();
+//void genTriangles();
 
 /*
  *  Copied from example code (ex6.c)
@@ -227,6 +237,21 @@ void setProjection() {
     glutPostRedisplay();
 }
 
+void drawGrid() {
+    cell *row = corner, *current;
+
+    glEnableClientState(GL_VERTEX_ARRAY);
+    for (; row; row = row->nextZ) {
+        current = row;
+        for (; current; current = current->nextX) {
+            glVertexPointer(3, GL_FLOAT, 0, current->tris.data);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+            glDrawArrays(GL_TRIANGLES, 0, current->tris.size / 3);
+        }
+    }
+    glDisableClientState(GL_VERTEX_ARRAY);
+}
+
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
@@ -265,13 +290,14 @@ void display() {
         ErrCheck("display1");
         free(matrix);
 
-        glVertexPointer(3, GL_FLOAT, 0, triangles.data);
+        /*glVertexPointer(3, GL_FLOAT, 0, triangles.data);
         glEnableClientState(GL_VERTEX_ARRAY);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
         glDrawArrays(GL_TRIANGLES, 0, triangles.size / 3);
 
-        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_VERTEX_ARRAY);*/
+        drawGrid();
         glUseProgram(0);
     } else {
         glPushMatrix();
@@ -377,6 +403,8 @@ void motion(int x, int y) {
     } else {
         if (down[GLUT_LEFT_BUTTON]) {
             phi -= (double)adY / 4;
+            if (phi > 90) phi = 90;
+            else if (phi < -90) phi = -90;
             theta -= (double)adX / 4;
             setProjection();
             shouldRedisplay = 1;
@@ -511,7 +539,7 @@ void idle() {
             shouldRedisplay = 1;
         } else if (perspective == 3) {
             vec3f pos = {position.x, position.y - 2, position.z};
-            if (influenceAt(pos, balls, nBalls) > threshhold) {
+            if (terrain.influenceAt(pos) > terrain.threshhold) {
                 acceleration.y -= 0.1;
             }
             shouldRedisplay = 1;
@@ -534,7 +562,7 @@ void idle() {
             pos.y = position.y;
             int n = 0;
             int rVelocity = 0;
-            while (influenceAt(pos, balls, nBalls) < threshhold && n++ < 2) {
+            while (terrain.influenceAt(pos) < terrain.threshhold && n++ < 2) {
                 velocity = scalef(velocity, 0.5);
                 pos = sub(pos, scalef(velocity, 1 / 20.0));
             }
@@ -547,13 +575,13 @@ void idle() {
             pos.y += grav / 20.0 - 2;
             n = 0;
             double inf;
-            if (influenceAt(pos, balls, nBalls) < threshhold) {
+            if (terrain.influenceAt(pos) < terrain.threshhold) {
                 pos.y -= grav / 20.0;
                 velocity.y = 0;
                 onFloor = 1;
             }
-            while ((inf = influenceAt(pos, balls, nBalls)) < threshhold && n++ < 15) {
-                pos.y += threshhold - inf + 0.01;
+            while ((inf = terrain.influenceAt(pos)) < terrain.threshhold && n++ < 15) {
+                pos.y += terrain.threshhold - inf + 0.01;
                 velocity.y = 0;
             }
             if (n == 16) {
@@ -600,55 +628,6 @@ void reshape(int w,int h) {
     setProjection();
 }
 
-void genTriangles() {
-    vec3f min, max;
-    maxArea(balls, 1, &max, &min);
-    vec3f areasize = sub(max, min);
-    double precision = .1;
-    areasize = scalef(areasize, 1 / precision);
-    // comment this line out if using a number that is well-represented by a float (e.g. 0.5, 1, etc.)
-    // you'll know if this line needs to be commented out (everything will look broken)
-    // conversely, if the program segfaults, uncomment it
-    areasize.x++;areasize.y++;areasize.z++;
-    float *influence = calloc((int)(areasize.x * areasize.y * areasize.z), sizeof(float));
-    int n = 0;
-    vec3f pos;
-    float maxInfluence = 0;
-    for (float z = min.z; z < max.z; z += precision) {
-        pos.z = z;
-        for (float y = min.y; y < max.y; y += precision) {
-            pos.y = y;
-            for (float x = min.x; x < max.x; x += precision) {
-                pos.x = x;
-                influence[n++] = influenceAt(pos, balls, nBalls);
-                if (influence[n-1] > maxInfluence) {
-                    maxInfluence = influence[n-1];
-                }
-            }
-        }
-    }
-    n = 0;
-    for (float z = min.z; z < max.z; z += precision) {
-        pos.z = z;
-        for (float y = min.y; y < max.y; y += precision) {
-            pos.y = y;
-            for (float x = min.x; x < max.x; x += precision) {
-                pos.x = x;
-                if (n + 1 + (int) (areasize.x * areasize.y) < (int)(areasize.x * areasize.y * areasize.z)) {
-                    marchData cell = {{influence[n], influence[n + 1],
-                        influence[n + 1 + (int)areasize.x], influence[n + (int)areasize.x],
-                        influence[n + (int)(areasize.x * areasize.y)], influence[n + 1 + (int)(areasize.x * areasize.y)],
-                        influence[n + 1 + (int)areasize.x + (int)(areasize.x * areasize.y)], influence[n + (int)areasize.x + (int)(areasize.x * areasize.y)],
-                    }, pos, (float)precision};
-                    n++;
-                    triangles = march(cell, triangles, threshhold);
-                }
-            }
-        }
-    }
-    free(influence);
-}
-
 // the main function is mostly copied from the example code (likely ex6.c)
 // but I've added other functions as needed
 int main(int argc, char* argv[]) {
@@ -672,26 +651,11 @@ int main(int argc, char* argv[]) {
     srand(time(NULL));
     oldT = glutGet(GLUT_ELAPSED_TIME);
     dimInit = dim;
-    triangles = createArr();
-    balls = calloc(nBalls, sizeof(ball));
-    balls[0].influence = 5;
-    balls[1].pos.x = 3.5;
-    balls[1].influence = 2;
-    balls[2].pos.y = 2.5;
-    balls[2].influence = 4;
-    balls[3].pos.z = 1;
-    balls[3].influence = -1.5;
-    balls[4].pos.x = 3;
-    balls[4].pos.y = 2;
-    balls[4].pos.z = 1;
-    balls[4].influence = 5;
-    balls[5].pos.x = -4;
-    balls[5].influence = 5;
-    balls[6].pos.x = -3;
-    balls[6].pos.z = 1;
-    balls[6].influence = 1;
-    genTriangles();
     ID = createProgram("vert.vert", "frag.frag", 1);
+    vec3f cellPos = {0, -8, 0};
+    corner = createCell(cellPos, cellSize);
+    terrain = sineHill;
+    calculateTris(corner, terrain);
     glutMainLoop();
     return 0;
 }

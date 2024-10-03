@@ -369,9 +369,9 @@ growArr march(marchData cell, growArr triangles, float threshhold) {
          || isnan(temp.y) || isnan(temp1.y) || isnan(temp2.y)
          || isnan(temp.z) || isnan(temp1.z) || isnan(temp2.z)) continue;
         triangles = pushMultiple(triangles, 9,
-            temp.x, temp.y, temp.z,
-            temp1.x, temp1.y, temp1.z,
-            temp2.x, temp2.y, temp2.z
+            temp.x, -temp.y, temp.z,
+            temp1.x, -temp1.y, temp1.z,
+            temp2.x, -temp2.y, temp2.z
         );
     }
     return triangles;

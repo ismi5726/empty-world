@@ -46,7 +46,13 @@ growArr pushMultiple(growArr input, int num, ...) {
     return input;
 }
 
-growArr clear(growArr input) {
+void delArr(growArr input) {
     free(input.data);
+    // i think this should avoid double-frees
+    input.data = 0;
+}
+
+growArr clear(growArr input) {
+    delArr(input);
     return createArr();
 }
