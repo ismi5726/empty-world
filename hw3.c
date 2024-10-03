@@ -31,11 +31,13 @@
 
 // total rotation
 quat rotation = {0, 0, 0, 1};
+quat identity = {0, 0, 0, 1};
 
 int mouseX = 0;
 int mouseY = 0;
 // mouse button states
 int down[3] = {0, 0, 0};
+char keyDown = 0;
 int isInside = GLUT_LEFT;
 // mouse rotation sensitivity
 double sensitivity = 400;
@@ -43,6 +45,23 @@ double sensitivity = 400;
 // offsets for panning
 double offsetX = 0;
 double offsetY = 0;
+
+// for movement
+#ifndef PI
+#define PI 3.141592653
+#endif
+//double position[3] = {0, 0, 0};
+//double velocity[3] = {0, 0, 0};
+//double acceleration[3] = {0, 0, 0};
+vec3f position = {0, 0, 0};
+vec3f pos1 = {0, 0, -10};
+vec3f pos2 = {0, 0, 0};
+vec3f velocity = {0, 0, 0};
+vec3f acceleration = {0, 0, 0};
+vec3f vZero = {0, 0, 0};
+int onFloor = 0;
+double phi = -PI / 2;
+double theta = 0;
 
 double dim = 30;
 // used during resets
@@ -64,8 +83,16 @@ growArr triangles;
 
 int nBalls = 7;
 ball *balls = NULL;
+double threshhold = 1;
 
 int mode = 0;
+int perspective = 0;
+// for blocking the movement event from warpPointer
+int warp = 0;
+
+int oldT = 0;
+
+char state[][20] = {"Ortho", "Perspective", "Walking (outside)", "Walking (inside)"};
 
 void genTriangles();
 
@@ -178,20 +205,55 @@ void dodecahedron() {
     glDisableClientState(GL_COLOR_ARRAY);
 }
 
+void setProjection() {
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    if (perspective) {
+        double bottom = tan(60 * 3.14159/360.0) * 0.01;
+        glFrustum(-asp * bottom, asp * bottom, -bottom, bottom, 0.01, dim + clipPlane / 2);
+        if (perspective == 1) {
+            glTranslated(0, 0, -dim * 1.7);
+        } else {
+            //glRotated(-theta, cos(phi), 0, sin(phi));
+            glRotated(phi, -1, 0, 0);
+            glRotated(theta, 0, -1, 0);
+            glTranslatef(position.x, -position.y, position.z);
+        }
+    } else {
+        glOrtho(-hAsp*dim,+hAsp*dim, -wAsp*dim,+wAsp*dim, -clipPlane,+clipPlane);
+    }
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glutPostRedisplay();
+}
+
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glLoadIdentity();
+    // draw a nice grassy field so it looks like we're walking
+    if (perspective > 1) {
+        glColor3f(0.05, 0.6, 0.1);
+        glBegin(GL_TRIANGLES);
+        glVertex3f(-100, -2, -100);
+        glVertex3f(100, -2, -100);
+        glVertex3f(-100, -2, 100);
+        glVertex3f(100, -2, -100);
+        glVertex3f(100, -2, 100);
+        glVertex3f(-100, -2, 100);
+        glEnd();
+    }
 
-    // we need to translate before rotating so that rotating doesn't also rotate the direction of translation
-    // because of weird matrix multiplication stuff
-    glTranslated(offsetX, offsetY, 0);
-
-    // load current rotation
-    double *rot = toMat4(rotation);
-    glMultMatrixd(rot);
-    free(rot);
+    if (perspective < 3) {
+        // we need to translate before rotating so that rotating doesn't also rotate the direction of translation
+        // because of weird matrix multiplication stuff
+        glTranslated(offsetX, offsetY, 0);
+        // load current rotation
+        double *rot = toMat4(rotation);
+        glMultMatrixd(rot);
+        free(rot);
+    }
     
     if (mode == 0) {
         float *matrix = calloc(16, sizeof(float));
@@ -261,6 +323,7 @@ void display() {
     glLoadIdentity();
 
     glWindowPos2i(5, 5);
+    Print(state[perspective]);
 
     glFlush();
     glutSwapBuffers();
@@ -274,17 +337,17 @@ void mouse(int button, int up, int x, int y) {
     // only process on the down event for the scroll wheel
     else if (!up) {
         dim *= (button == 4) ? 1.1 : (1 / 1.1);
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(-hAsp*dim,+hAsp*dim, -wAsp*dim,+wAsp*dim, -clipPlane,+clipPlane);
-        glMatrixMode(GL_MODELVIEW);
-        glutPostRedisplay();
+        setProjection();
     }
     mouseX = x;
     mouseY = y;
 }
 
 void motion(int x, int y) {
+    if (warp) {
+        warp = 0;
+        return;
+    }
     // we still want to keep track of the mouse even when it's outside of the window to keep dragging smooth
     if (!isInside) {
         mouseX = x;
@@ -297,22 +360,47 @@ void motion(int x, int y) {
     double adX = dX * adjSensitivity;
     double adY = dY * adjSensitivity;
     int shouldRedisplay = 0;
-    if (down[GLUT_LEFT_BUTTON]) {
-        // left mouse button - rotate the attractor around its origin
-        quat temp_rot = fromEuler(adY, adX, 0);
-        rotation = multiply(temp_rot, rotation);
-        shouldRedisplay = 1;
-    }
-    if (down[GLUT_RIGHT_BUTTON]) {
-        // right mouse button - pan the attractor
-        // this might seem like a bunch of magic numbers, but it's perfect to make moving smooth at any window size
-        offsetX += 2 * dX * dim * hAsp / width;
-        offsetY -= 2 * dY * dim * wAsp / height;
-        shouldRedisplay = 1;
+    if (perspective < 2) {
+        if (down[GLUT_LEFT_BUTTON]) {
+            // left mouse button - rotate the attractor around its origin
+            quat temp_rot = fromEuler(adY, adX, 0);
+            rotation = multiply(temp_rot, rotation);
+            shouldRedisplay = 1;
+        }
+        if (down[GLUT_RIGHT_BUTTON]) {
+            // right mouse button - pan the attractor
+            // this might seem like a bunch of magic numbers, but it's perfect to make moving smooth at any window size
+            offsetX += 2 * dX * dim * hAsp / width;
+            offsetY -= 2 * dY * dim * wAsp / height;
+            shouldRedisplay = 1;
+        }
+    } else {
+        if (down[GLUT_LEFT_BUTTON]) {
+            phi -= (double)adY / 4;
+            theta -= (double)adX / 4;
+            setProjection();
+            shouldRedisplay = 1;
+        }
+        if (down[GLUT_MIDDLE_BUTTON] && perspective == 2) {
+            // right mouse button - pan the attractor
+            // this might seem like a bunch of magic numbers, but it's perfect to make moving smooth at any window size
+            double dist = hypot(position.x, position.z) / 1.7;
+            offsetX += 2 * dX * dist * hAsp / width;
+            offsetY -= 2 * dY * dist * wAsp / height;
+            shouldRedisplay = 1;
+        }
+        if (down[GLUT_RIGHT_BUTTON] && perspective == 2) {
+            // left mouse button - rotate the attractor around its origin
+            quat temp_rot = fromEuler(adY, adX, 0);
+            rotation = multiply(temp_rot, rotation);
+            shouldRedisplay = 1;
+        }
     }
     mouseX = x;
     mouseY = y;
-    if (shouldRedisplay) glutPostRedisplay();
+    if (shouldRedisplay) {
+        glutPostRedisplay();
+    }
 }
 
 void entry(int state) {
@@ -320,8 +408,174 @@ void entry(int state) {
 }
 
 void key(unsigned char key, int x, int y) {
-    if (key == 'm') {
-        mode = !mode;
+    switch (key) {
+        // exit on 'Q' or escape (was listed as a nice thing to do)
+        case 'q':
+        case 27:
+            // space here to avoid accidentally doing anything with terminal codes
+            printf("%s\n", "Thanks for playing :) ");
+            exit(0);
+            break;
+        case 'm':
+            if (perspective == 3) break;
+            mode = !mode;
+            glutPostRedisplay();
+            break;
+        case 'p':
+            perspective++;
+            perspective %= 4;
+            switch (perspective) {
+                case 2:
+                    position = pos1;
+                    break;
+                case 3:
+                    pos1 = position;
+                    position = pos2;
+                    mode = 0;
+                    break;
+                case 0:
+                    pos2 = position;
+                    break;
+            }
+            velocity = vZero;
+            acceleration = vZero;
+            setProjection();
+            break;
+        case 'w':
+        case 'a':
+        case 's':
+        case 'd':
+            if (perspective > 1) {
+                keyDown = key;
+            }
+            break;
+        // jump with space
+        case 32:
+            if (onFloor) {
+                velocity.y += 5;
+                onFloor = 0;
+            } else {
+            }
+            break;
+        case '0':
+            position = vZero;
+            if (perspective == 2) {
+                position.z = -10;
+            }
+            phi = -PI / 2;
+            theta = 0;
+            offsetX = 0;
+            offsetY = 0;
+            rotation = identity;
+            mode = 0;
+            dim = dimInit;
+            break;
+    }
+}
+
+void keyUp(unsigned char key, int x, int y) {
+    if (key == keyDown) {
+        keyDown = 0;
+    }
+}
+
+void idle() {
+    int time = glutGet(GLUT_ELAPSED_TIME);
+    int shouldRedisplay = 1;
+    // note: changed this from a while loop to an if statement
+    // so if the physics take too long to calculate (they shouldn't, but just in case)
+    // it won't start running super behind
+    // however, this means that the physics are max 60 fps
+    if (oldT < time) {
+        switch (keyDown) {
+            case 'w':
+            case 's':
+                acceleration.x += sin(theta * PI / 180) / 50 * (keyDown == 'w' ? 1 : -1);
+                acceleration.z += cos(theta * PI / 180) / 50 * (keyDown == 'w' ? 1 : -1);
+                break;
+            case 'a':
+            case 'd':
+                acceleration.x += cos(theta * PI / 180) / 50 * (keyDown == 'a' ? 1 : -1);
+                acceleration.z -= sin(theta * PI / 180) / 50 * (keyDown == 'a' ? 1 : -1);
+                break;
+            default:
+                shouldRedisplay = 0;
+                break;
+        }
+        if (perspective == 2) {
+            if (position.y > 0) {
+                acceleration.y -= 0.1;
+            } else {
+                onFloor = 1;
+            }
+            shouldRedisplay = 1;
+        } else if (perspective == 3) {
+            vec3f pos = {position.x, position.y - 2, position.z};
+            if (influenceAt(pos, balls, nBalls) > threshhold) {
+                acceleration.y -= 0.1;
+            }
+            shouldRedisplay = 1;
+        }
+        acceleration = scalef(acceleration, 0.2);
+        acceleration.y *= 0.5;
+        velocity = add(velocity, scalef(acceleration, 20));
+        velocity = scalef(velocity, 0.95);
+        if (perspective == 2) {
+            position = add(position, scalef(velocity, 1 / 20.0));
+            if (position.y < 0) {
+                position.y = 0;
+                velocity.y = 0;
+                acceleration.y = 0;
+                onFloor = 1;
+            }
+        } else if (perspective == 3) {
+            vec3f pos = add(position, scalef(velocity, 1 / 20.0));
+            float grav = velocity.y;
+            pos.y = position.y;
+            int n = 0;
+            int rVelocity = 0;
+            while (influenceAt(pos, balls, nBalls) < threshhold && n++ < 2) {
+                velocity = scalef(velocity, 0.5);
+                pos = sub(pos, scalef(velocity, 1 / 20.0));
+            }
+            if (n == 3) {
+                rVelocity = 1;
+                pos = position;
+                velocity.y = grav;
+            } else {
+            }
+            pos.y += grav / 20.0 - 2;
+            n = 0;
+            double inf;
+            if (influenceAt(pos, balls, nBalls) < threshhold) {
+                pos.y -= grav / 20.0;
+                velocity.y = 0;
+                onFloor = 1;
+            }
+            while ((inf = influenceAt(pos, balls, nBalls)) < threshhold && n++ < 15) {
+                pos.y += threshhold - inf + 0.01;
+                velocity.y = 0;
+            }
+            if (n == 16) {
+                position = sub(position, scalef(velocity, 1 / 20.0));
+                rVelocity = 1;
+                printf("can't solve\n");
+            } else if (n > 0) {
+                position = pos;
+                position.y += 2;
+                velocity.y = 0;
+            } else {
+                position = pos;
+                position.y += 2;
+            }
+            if (rVelocity) {
+                velocity = vZero;
+            }
+        }
+        oldT += 1000 / 60.0;
+    }
+    if (shouldRedisplay) {
+        setProjection();
         glutPostRedisplay();
     }
 }
@@ -337,21 +591,13 @@ void reshape(int w,int h) {
     //  Set the viewport to the entire window
     glViewport(0,0, RES*width,RES*height);
     //  Tell OpenGL we want to manipulate the projection matrix
-    glMatrixMode(GL_PROJECTION);
-    //  Undo previous transformations
-    glLoadIdentity();
     //  Orthogonal projection box adjusted for the
     //  aspect ratio of the window
     asp = (height>0) ? (double)width/height : 1;
     hAsp = asp < 1 ? 1 : asp;
     // should avoid any divide-by-zero errors
     wAsp = asp < 1 ? (width > 0 ? 1 / asp : 1) : 1;
-    glOrtho(-hAsp*dim,+hAsp*dim, -wAsp*dim,+wAsp*dim, -clipPlane,+clipPlane);
-    //glFrustum(-hAsp*dim,+hAsp*dim, -wAsp*dim,+wAsp*dim, 0.1,+clipPlane);
-    //  Switch to manipulating the model matrix
-    glMatrixMode(GL_MODELVIEW);
-    //  Undo previous transformations
-    glLoadIdentity();
+    setProjection();
 }
 
 void genTriangles() {
@@ -377,7 +623,6 @@ void genTriangles() {
                 influence[n++] = influenceAt(pos, balls, nBalls);
                 if (influence[n-1] > maxInfluence) {
                     maxInfluence = influence[n-1];
-                    //printf("max: %f", maxInfluence);
                 }
             }
         }
@@ -396,13 +641,12 @@ void genTriangles() {
                         influence[n + 1 + (int)areasize.x + (int)(areasize.x * areasize.y)], influence[n + (int)areasize.x + (int)(areasize.x * areasize.y)],
                     }, pos, (float)precision};
                     n++;
-                    triangles = march(cell, triangles, 1);
+                    triangles = march(cell, triangles, threshhold);
                 }
             }
         }
     }
     free(influence);
-    //printf("%i\n", triangles.size);
 }
 
 // the main function is mostly copied from the example code (likely ex6.c)
@@ -423,7 +667,11 @@ int main(int argc, char* argv[]) {
     glutMotionFunc(motion);
     glutEntryFunc(entry);
     glutKeyboardFunc(key);
+    glutKeyboardUpFunc(keyUp);
+    glutIdleFunc(idle);
     srand(time(NULL));
+    oldT = glutGet(GLUT_ELAPSED_TIME);
+    dimInit = dim;
     triangles = createArr();
     balls = calloc(nBalls, sizeof(ball));
     balls[0].influence = 5;
