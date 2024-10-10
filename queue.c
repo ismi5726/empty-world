@@ -9,7 +9,11 @@ queue *enqueue(queue *q, void *data, int priority) {
 
     queue *prev = NULL;
     queue *current = q;
-    for (; current && current->priority > priority; current = current->next) prev = current;
+    for (; current && current->priority <= priority; current = current->next) {
+        prev = current;
+        // avoid re-adding items
+        if (current->data == data && current->priority == priority) return q;
+    }
 
     if (prev) {
         item->next = prev->next;
@@ -22,6 +26,7 @@ queue *enqueue(queue *q, void *data, int priority) {
 }
 
 void *peek(queue *q) {
+    if (!q) return NULL;
     return q->data;
 }
 

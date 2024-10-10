@@ -7,6 +7,7 @@ typedef struct cell {
     vec3f pos;
     vec3f size;
     int lod;
+    int needsRender;
     growArr tris;
     struct cell *nextX;
     struct cell *nextZ;
@@ -16,5 +17,6 @@ typedef struct cell {
 
 void calculateTris(cell *ptr, funcDef f);
 float cellDistance(cell *ptr, vec3f pos);
+int roughCellDistance(cell *ptr, vec3f pos);
 void delCell(cell *ptr);
 cell *createCell(vec3f pos, vec3f size);

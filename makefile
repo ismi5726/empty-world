@@ -1,5 +1,5 @@
 # makefile copied almost entirely in whole from the ex14 makefile
-EXE=hw4
+EXE=hw5
 
 # Main target
 all: $(EXE)
@@ -26,7 +26,7 @@ CLEAN=rm -f $(EXE) *.o *.a
 endif
 
 # Dependencies
-hw4.o: hw4.c arr.h ball.h cell.h funcs.h march.h quat.h vec3.h shaders.h
+hw5.o: hw5.c arr.h ball.h cell.h funcs.h march.h quat.h vec3.h shaders.h
 arr.o: arr.c arr.h
 ball.o: ball.c ball.h vec3.h
 cell.o: cell.c arr.h cell.h funcs.h march.h vec3.h
@@ -48,7 +48,7 @@ dep.a:arr.o ball.o cell.o funcs.o march.o quat.o queue.o shaders.o vec3.o
 		g++ -c $(CFLG)  $<
 
 #  Link
-hw4:hw4.o   dep.a
+hw5:hw5.o   dep.a
 		gcc $(CFLG) -o $@ $^  $(LIBS)
 
 #  Clean

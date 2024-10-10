@@ -81,6 +81,11 @@ int roughCellDistance(cell *ptr, vec3f pos) {
     return (int)(tot.x + tot.y + tot.z);
 }
 
+vec3f cellPos(vec3f pos) {
+    pos = scalef(pos, 1.0 / 16);
+    pos.x = (int)pos.x; pos.y = (int)pos.y; pos.z = (int)pos.z;
+}
+
 void delCell(cell *ptr) {
     cell c = *ptr;
     delArr(c.tris);
@@ -112,5 +117,6 @@ cell *createCell(vec3f pos, vec3f size) {
     ptr->tris = createArr();
     ptr->pos = pos;
     ptr->size = size;
+    ptr->needsRender = 1;
     return ptr;
 }
