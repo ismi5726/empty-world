@@ -10,7 +10,8 @@ typedef struct cell {
     int needsRender;
     growArr tris;
     growArr normals;
-    unsigned int buffers[2];
+    growArr textureCoords;
+    unsigned int buffers[3];
     struct cell *nextX;
     struct cell *nextZ;
     struct cell *prevX;

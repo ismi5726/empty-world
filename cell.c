@@ -3,6 +3,7 @@
 #include "cell.h"
 #include "funcs.h"
 #include "vec3.h"
+//#include "loadtexbmp.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,7 +68,13 @@ void calculateTris(cell *ptr, funcDef f) {
     glBindBuffer(GL_ARRAY_BUFFER, ptr->buffers[1]);
     glBufferData(GL_ARRAY_BUFFER, ptr->normals.size * sizeof(float), ptr->normals.data, GL_STATIC_DRAW);
 
+    glBindBuffer(GL_ARRAY_BUFFER, ptr->buffers[2]);
+    glBufferData(GL_ARRAY_BUFFER, ptr->textureCoords.size * sizeof(float), ptr->textureCoords.data, GL_STATIC_DRAW);
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    //ErrCheck("calculateTris");
+
+    ptr->needsRender = 0;
 }
 
 float cellDistance(cell *ptr, vec3f pos) {
@@ -134,9 +141,10 @@ cell *createCell(vec3f pos, vec3f size) {
     //cell c = *ptr;
     ptr->tris = createArr();
     ptr->normals = createArr();
+    ptr->textureCoords = createArr();
     ptr->pos = pos;
     ptr->size = size;
     ptr->needsRender = 1;
-    glGenBuffers(2, ptr->buffers);
+    glGenBuffers(3, ptr->buffers);
     return ptr;
 }

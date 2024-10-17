@@ -30,6 +30,8 @@
 #include "cell.h"
 #include "funcs.h"
 #include "queue.h"
+#include "loadtexbmp.h"
+#include "perlin.h"
 
 
 // total rotation
@@ -66,7 +68,7 @@ int onFloor = 0;
 double phi = -30;
 double theta = 45;
 
-double dim = 30;
+double dim = 3;
 // used during resets
 double dimInit;
 double clipPlane = 200;
@@ -77,16 +79,11 @@ double hAsp = 1;
 // vertical aspect ratio - 1 if wider than tall, otherwise 1/asp (if asp is non-zero)
 double wAsp = 1;
 
+
 int width = 500;
 int height = 500;
 
 unsigned int ID;
-
-/*growArr triangles;
-
-int nBalls = 7;
-ball *balls = NULL;
-double threshhold = 1;*/
 
 funcDef terrain;
 
@@ -119,6 +116,9 @@ dodeData dodes[nDodes];
 
 char state[][20] = {"Ortho", "Perspective", "Walking (outside)", "Walking"};
 
+int groundTexture;
+int crateTexture;
+
 void createGrid(int, int);
 void clearGrid();
 
@@ -141,28 +141,34 @@ void Print(const char* format , ...)
       glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18,*ch++);
 }
 
-/*
- * Copied from example code (ex8.c)
- * Check for OpenGL errors
- */
-void ErrCheck(const char* where)
-{
-   int err = glGetError();
-   if (err) fprintf(stderr,"ERROR: %s [%s]\n",gluErrorString(err),where);
-}
+// algorithm from https://stackoverflow.com/a/47956568
+vec3f dodeFaceCenter;
+vec3f dodeFaceArb;
+vec3f dodeFacePart;
+// true = 1, false = -1
+#define center dodeFaceCenter
+int pointSort(const void *_a, const void *_b) {
+    vec3f a = *(vec3f *) _a;
+    vec3f b = *(vec3f *) _b;
 
-/*
- *  Copied from example code (ex6.c)
- *  Print message to stderr and exit
- */
-void Fatal(const char* format , ...)
-{
-   va_list args;
-   va_start(args,format);
-   vfprintf(stderr,format,args);
-   va_end(args);
-   exit(1);
+    vec3f u1 = sub(a, center);
+    vec3f u2 = sub(b, center);
+    float h1 = dot(u1, dodeFacePart);
+    float h2 = dot(u2, dodeFacePart);
+
+    if (h2 <= 0 && h1 > 0) {
+        return -1;
+    } else if (h1 <= 0 && h2 > 0) {
+        return 1;
+    } else if (h1 == 0 && h2 == 0) {
+        return (dot(u1, dodeFaceArb) > 0 && dot(u2, dodeFaceArb) < 0) ? 1 : -1;
+    } else {
+        return (dot(cross(u1, u2), center) > 0) ? 1 : -1;
+    }
 }
+#undef center
+
+int first = 1;
 
 void dodecahedron() {
     double phi = (1 + sqrt(5)) / 2;
@@ -188,19 +194,45 @@ void dodecahedron() {
         -phi, 1/phi, 0,
         -phi, -1/phi, 0
     };
+    float faceTexture[] = {
+        0, 1, 0,
+        1, 0, 0,
+        1, 1, 0,
+        0, 1, 0,
+        1, 0, 0,
+        0, 0.75, 0,
+        1, 0, 0,
+        0.75, 0, 0,
+        0, 0.75, 0,
+    };
     char faces[] = {
-        0, 16, 1, 0, 1, 8, 1, 9, 8,
-        1, 3, 13, 1, 16, 3, 3, 16, 17,
-        2, 3, 17, 3, 2, 10, 3, 10, 11,
-        2, 0, 12, 2, 16, 0, 2, 17, 16,
-        4, 5, 18, 4, 8, 5, 5, 8, 9,
-        5, 15, 7, 5, 7, 18, 7, 19, 18,
-        7, 6, 19, 7, 11, 6, 6, 11, 10,
-        4, 6, 14, 6, 4, 18, 6, 18, 19,
-        0, 8, 4, 0, 4, 12, 4, 14, 12,
-        1, 5, 9, 1, 13, 5, 5, 13, 15,
-        2, 6, 10, 2, 14, 6, 2, 12, 14,
-        3, 11, 7, 3, 7, 15, 3, 15, 13
+        1, 0, 16, 0, 1, 8, 1, 9, 8,
+        1, 3, 13, 1, 3, 16, 3, 17, 16, 
+        2, 3, 17, 3, 2, 11, 2, 10, 11,
+        2, 0, 12, 0, 2, 16, 2, 17, 16,
+        4, 5, 18, 4, 5, 8, 5, 9, 8, 
+        7, 5, 15, 5, 7, 18, 7, 19, 18,
+        7, 6, 19, 7, 6, 11, 6, 10, 11, 
+        4, 6, 14, 4, 6, 18, 6, 19, 18, 
+        0, 4, 8, 0, 4, 12, 4, 14, 12,
+        1, 5, 9, 1, 5, 13, 5, 15, 13, 
+        2, 6, 10, 6, 2, 14, 2, 12, 14,
+        7, 3, 11, 7, 3, 15, 3, 13, 15 
+    };
+    // the faces from above, after having been sorted around their centers and de-duplicated
+    char faces2[] = {
+        16,0,8,9,1,
+        13,3,17,16,1,
+        17,3,11,10,2,
+        12,0,16,17,2,
+        18,5,9,8,4,
+        15,5,18,19,7,
+        19,6,10,11,7,
+        14,6,19,18,4,
+        0,12,14,4,8,
+        9,5,15,13,1,
+        10,6,14,12,2,
+        11,3,13,15,7,
     };
     // colors adapted from ex6.c
     float colors[] = {
@@ -312,11 +344,76 @@ void dodecahedron() {
         1.0, 1.0, 0.0,
         1.0, 1.0, 0.0,
         1.0, 1.0, 0.0
-        };
+    };
 
-   vec3f v[108] = {};
-   vec3f n[108] = {};
-   for (int i = 0; i < 108; i+=3) {
+   //const int f = 108;
+   const int f = 108 * 15 / 9;
+   vec3f v[f] = {};
+   vec3f n[f] = {};
+   //float t[216] = {};
+   vec3f t[f] = {};
+   vec3f c[f] = {};
+   int k = 0;
+   for (int i = 0; i < 60; i += 5) {
+        /*vec3f v1 = vec3fInArray(coords, faces[i] * 3);
+        vec3f v3 = vec3fInArray(coords, faces[i + 1] * 3);
+        vec3f v2 = vec3fInArray(coords, faces[i + 2] * 3);
+        vec3f v4, v5;
+        if (1 || faces[i+2] > faces[i + 5]) {
+            v4 = vec3fInArray(coords, faces[i + 5] * 3);
+            v5 = vec3fInArray(coords, faces[i + 7] * 3);
+        } else {
+            v5 = vec3fInArray(coords, faces[i + 5] * 3);
+            v4 = vec3fInArray(coords, faces[i + 7] * 3);
+        }*/
+        /*vec3f v1 = vec3fInArray(coords, faces[i] * 3);
+        vec3f v2 = vec3fInArray(coords, faces[i + 1] * 3);
+        vec3f v3 = vec3fInArray(coords, faces[i + 2] * 3);
+        vec3f v4 = vec3fInArray(coords, faces[i + 5] * 3);
+        vec3f v5 = vec3fInArray(coords, faces[i + 7] * 3);
+        vec3f normal = cross(sub(v2, v1), sub(v3, v1));
+        vec3f center = scalef(add(add(add(v1, v2), add(v3, v4)), v5), 1.0 / 5.0);
+        dodeFaceArb = sub(v1, center);
+        dodeFaceCenter = center;
+        dodeFacePart = cross(dodeFaceArb, center);
+        vec3f vecs[5] = {v1, v2, v3, v4, v5};
+        qsort(vecs, 5, sizeof(vec3f), pointSort);
+        if (first) {
+            vec3f vecs2[5] = {v1, v2, v3, v4, v5};
+            int offsets[5] = {0, 1, 2, 5, 7};
+            for (int j = 0; j < 5; j++) {
+                for (int k = 0; k < 5; k++) {
+                    if (vecs[j].x == vecs2[k].x && vecs[j].y == vecs2[k].y && vecs[j].z == vecs2[k].z) {
+                        printf("%i,", faces[i + offsets[k]]);
+                        //break;
+                    }
+                }
+            }
+            printf("\n");
+        }*/
+        vec3f v1 = vec3fInArray(coords, faces2[i] * 3);
+        vec3f v2 = vec3fInArray(coords, faces2[i + 1] * 3);
+        vec3f v3 = vec3fInArray(coords, faces2[i + 2] * 3);
+        vec3f v4 = vec3fInArray(coords, faces2[i + 3] * 3);
+        vec3f v5 = vec3fInArray(coords, faces2[i + 4] * 3);
+        vec3f normal = cross(sub(v2, v1), sub(v3, v1));
+        vec3f center = scalef(add(add(add(v1, v2), add(v3, v4)), v5), 1.0 / 5.0);
+        vec3f vecs[5] = {v1, v2, v3, v4, v5};
+        for (int j = 0; j < 5; j++) {
+            v[k] = vecs[j];
+            c[k] = vec3fInArray(colors, i * 27 / 5);
+            n[k++] = normal;
+            c[k] = vec3fInArray(colors, i * 27 / 5);
+            v[k] = vecs[(j + 1) % 5];
+            n[k++] = normal;
+            v[k] = center;
+            c[k] = vec3fInArray(colors, i * 27 / 5);
+            n[k++] = normal;
+        }
+   }
+   first = 0;
+   /*
+   for (int i = 0; i < f; i+=3) {
         vec3f v1 = vec3fInArray(coords, faces[i] * 3);
         vec3f v2 = vec3fInArray(coords, faces[i + 1] * 3);
         vec3f v3 = vec3fInArray(coords, faces[i + 2] * 3);
@@ -327,20 +424,32 @@ void dodecahedron() {
         n[i + 1] = normal;
         v[i + 2] = v3;
         n[i + 2] = normal;
+        int j = i % 9;
+        vec3f texCoords;
+        texCoords = vec3fInArray(faceTexture, j++ * 3);
+        t[i] = texCoords;
+        texCoords = vec3fInArray(faceTexture, j++ * 3);
+        t[i + 1] = texCoords;
+        texCoords = vec3fInArray(faceTexture, j++ * 3);
+        t[i + 2] = texCoords;
    }
+   */
 
 
     glVertexPointer(3, GL_FLOAT, 0, v);
     glEnableClientState(GL_VERTEX_ARRAY);
-    glColorPointer(3, GL_FLOAT, 0, colors);
+    glColorPointer(3, GL_FLOAT, 0, c);
     glEnableClientState(GL_COLOR_ARRAY);
     glNormalPointer(GL_FLOAT, 0, n);
     glEnableClientState(GL_NORMAL_ARRAY);
+    glTexCoordPointer(3, GL_FLOAT, 0, t);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glShadeModel(GL_SMOOTH);
-    glDrawArrays(GL_TRIANGLES, 0, 108);
+    glDrawArrays(GL_TRIANGLES, 0, f);
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_NORMAL_ARRAY);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
 void setProjection() {
@@ -359,7 +468,7 @@ void setProjection() {
             //glRotated(-theta, cos(phi), 0, sin(phi));
             glRotated(phi, -1, 0, 0);
             glRotated(theta, 0, -1, 0);
-            glTranslatef(position.x, -position.y, position.z);
+            glTranslatef(position.x, -position.y - 4, position.z);
         }
     } else {
         glOrtho(-hAsp*dim,+hAsp*dim, -wAsp*dim,+wAsp*dim, -clipPlane,+clipPlane);
@@ -375,36 +484,32 @@ void setProjection() {
 void drawGrid() {
     cell *row = corner, *current;
 
-    //glEnableClientState(GL_VERTEX_ARRAY);
-    //glEnableClientState(GL_NORMAL_ARRAY);
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, groundTexture);
+    glUniform1i(glGetUniformLocation(ID, "smplr"), 0);
     for (; row; row = row->nextZ) {
         current = row;
         for (; current; current = current->nextX) {
-            //glVertexPointer(3, GL_FLOAT, 0, current->tris.data);
-            //glEnableVertexAttribArray(0);
-            //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-            //glNormalPointer(GL_FLOAT, 0, current->normals.data);
-            //glEnableVertexAttribArray(1);
-            //glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
             glBindBuffer(GL_ARRAY_BUFFER, current->buffers[0]);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
             glBindBuffer(GL_ARRAY_BUFFER, current->buffers[1]);
             glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 0, 0);
 
+            glBindBuffer(GL_ARRAY_BUFFER, current->buffers[2]);
+            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
             glDrawArrays(GL_TRIANGLES, 0, current->tris.size / 3);
-            //glDisableVertexAttribArray(0);
-            //glDisableVertexAttribArray(1);
         }
     }
     ErrCheck("drawGrid");
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //glDisableClientState(GL_NORMAL_ARRAY);
-    //glDisableClientState(GL_VERTEX_ARRAY);
 }
 
 void display() {
@@ -423,6 +528,7 @@ void display() {
         free(rot);
     }
 
+    ErrCheck("display2");
     float *matrix = calloc(16, sizeof(float));
     glUseProgram(ID);
     glGetFloatv(GL_MODELVIEW_MATRIX, matrix);
@@ -435,6 +541,7 @@ void display() {
     if (perspective > 1) {
         glEnable(GL_CULL_FACE);
         vec3f lightPos = position;
+        lightPos.y += 4;
         glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
         drawGrid();
         glDisable(GL_CULL_FACE);
@@ -453,7 +560,7 @@ void display() {
     float t = oldT - lightOffset;
     vec3f posVec = {};
     if (perspective > 1) {
-        vec3f temp = {-position.x, position.y, -position.z};
+        vec3f temp = {-position.x, -position.y, -position.z};
         posVec = temp;
     } else {
         vec3f temp = {cosf(t / 2000) * 300, 6, sinf(t / 2000) * 300};
@@ -488,6 +595,8 @@ void display() {
         glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.0019);
     }
 
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, crateTexture);
     for (int i = 0; i < nDodes; i++) {
         glPushMatrix();
         glTranslatef(dodes[i].tX, 0, dodes[i].tZ);
@@ -502,28 +611,17 @@ void display() {
         dodecahedron();
         glPopMatrix();
     }
-    // draw a nice grassy field so it looks like we're walking
-    /*
-    if (perspective > 1) {
-        glColor3f(0.05, 0.6, 0.1);
-        glBegin(GL_TRIANGLES);
-        glVertex3f(-100 - position.x, -2, -100 - position.z);
-        glVertex3f(100 - position.x, -2, -100 - position.z);
-        glVertex3f(-100 - position.x, -2, 100 - position.z);
-        glVertex3f(100 - position.x, -2, -100 - position.z);
-        glVertex3f(100 - position.x, -2, 100 - position.z);
-        glVertex3f(-100 - position.x, -2, 100 - position.z);
-        glEnd();
-    }//*/
     glLightfv(GL_LIGHT0, GL_POSITION, pos);
     glShadeModel(GL_FLAT);
-    dodecahedron();
+    //dodecahedron();
+    glDisable(GL_TEXTURE_2D);
 
     glDisable(GL_CULL_FACE);
     glDisable(GL_LIGHTING);
     glDisable(GL_LIGHT0);
     glDisable(GL_COLOR_MATERIAL);
     glDisable(GL_NORMALIZE);
+    dodecahedron();
 
     double gridSize = dim / 10;
     double offset = 2 * (dim / dimInit);
@@ -655,7 +753,7 @@ void key(unsigned char key, int x, int y) {
         // jump with space
         case 32:
             if (onFloor) {
-                velocity.y += 5;
+                velocity.y -= 5;
                 onFloor = 0;
             } else {
             }
@@ -695,29 +793,25 @@ void idle() {
         switch (keyDown) {
             case 'w':
             case 's':
-                acceleration.x += sin(theta * PI / 180) / 50 * (keyDown == 'w' ? 1 : -1);
-                acceleration.z += cos(theta * PI / 180) / 50 * (keyDown == 'w' ? 1 : -1);
+                acceleration.x -= sin(theta * PI / 180) / 50 * (keyDown == 'w' ? 1 : -1);
+                acceleration.z -= cos(theta * PI / 180) / 50 * (keyDown == 'w' ? 1 : -1);
                 break;
             case 'a':
             case 'd':
-                acceleration.x += cos(theta * PI / 180) / 50 * (keyDown == 'a' ? 1 : -1);
-                acceleration.z -= sin(theta * PI / 180) / 50 * (keyDown == 'a' ? 1 : -1);
+                acceleration.x -= cos(theta * PI / 180) / 50 * (keyDown == 'a' ? 1 : -1);
+                acceleration.z += sin(theta * PI / 180) / 50 * (keyDown == 'a' ? 1 : -1);
                 break;
             default:
                 shouldRedisplay = 0;
                 break;
         }
-        if (perspective == 2) {
-            if (position.y > 0) {
-                acceleration.y -= 0.1;
-            } else {
-                onFloor = 1;
-            }
-            shouldRedisplay = 1;
-        } else if (perspective == 3) {
+        //position.x = -position.x;
+        //position.z = -position.z;
+        position = scalef(position, -1);
+        if (perspective == 3) {
             vec3f pos = {position.x, position.y - 2, position.z};
-            if (terrain.influenceAt(pos) > terrain.threshhold) {
-                acceleration.y -= 0.1;
+            if (terrain.influenceAt(pos) < terrain.threshhold) {
+                acceleration.y += 0.1;
             }
             shouldRedisplay = 1;
         }
@@ -725,24 +819,18 @@ void idle() {
         acceleration.y *= 0.5;
         velocity = add(velocity, scalef(acceleration, 20));
         velocity = scalef(velocity, onFloor ? 0.95 : 0.98);
-        if (perspective == 2) {
-            position = add(position, scalef(velocity, 1 / 20.0));
-            if (position.y < 0) {
-                position.y = 0;
-                velocity.y = 0;
-                acceleration.y = 0;
-                onFloor = 1;
-            }
-        } else if (perspective == 3) {
+        if (perspective == 3) {
             vec3f pos = add(position, scalef(velocity, 1 / 20.0));
             float grav = velocity.y;
             pos.y = position.y;
             int n = 0;
             int rVelocity = 0;
-            while (terrain.influenceAt(pos) < terrain.threshhold && n++ < 2) {
+            pos.y -= 4;
+            while (terrain.influenceAt(pos) > terrain.threshhold && n++ < 2) {
                 velocity = scalef(velocity, 0.5);
                 pos = sub(pos, scalef(velocity, 1 / 20.0));
             }
+            pos.y += 4;
             if (n == 3) {
                 rVelocity = 1;
                 pos = position;
@@ -752,13 +840,13 @@ void idle() {
             pos.y += grav / 20.0 - 2;
             n = 0;
             double inf;
-            if (terrain.influenceAt(pos) < terrain.threshhold) {
+            if (terrain.influenceAt(pos) > terrain.threshhold) {
                 pos.y -= grav / 20.0;
                 velocity.y = 0;
                 onFloor = 1;
             }
-            while ((inf = terrain.influenceAt(pos)) < terrain.threshhold && n++ < 15) {
-                pos.y += terrain.threshhold - inf + 0.01;
+            while ((inf = terrain.influenceAt(pos)) > terrain.threshhold && n++ < 15) {
+                pos.y += terrain.threshhold - inf - 0.01;
                 velocity.y = 0;
             }
             if (n == 16) {
@@ -781,6 +869,7 @@ void idle() {
         if (lightStopped) {
             lightOffset += 1000 / 60.0;
         }
+        position = scalef(position, -1);
     }
     cell *toRender = peek(cellQueue);
     if (toRender) {
@@ -909,8 +998,12 @@ int main(int argc, char* argv[]) {
         dodes[i].tX = (rand() % 400) - 200;
         dodes[i].tZ = (rand() % 400) - 200;
     }
+    groundTexture = LoadTexBMP("ground.bmp", GL_NEAREST);
+    crateTexture = LoadTexBMP("crate.bmp", GL_LINEAR);
     createGrid(0, 0);
-    terrain = sineHill;
+    //terrain = sineHill;
+    terrain = perlin;
+    setupPerlin();
     calculateTris(corner, terrain);
     glutMainLoop();
     return 0;

@@ -7,3 +7,4 @@ typedef struct funcDef {
 } funcDef;
 
 extern const funcDef sineHill;
+extern const funcDef perlin;

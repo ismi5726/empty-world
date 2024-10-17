@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "preLaunchTask": "make project",
-            "program": "${workspaceFolder}/hw5",
+            "program": "${workspaceFolder}/hw6",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

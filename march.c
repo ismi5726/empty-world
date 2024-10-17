@@ -322,7 +322,7 @@ const vec3f _v1 = {1, -1, -1};
 const vec3f _v2 = {-1, -1, 1};
 const vec3f _v3 = {-1, 1, -1};
 const vec3f _v4 = {1, 1, 1};
-#define EPS 0.002
+#define EPS 0.02
 vec3f normalAt(vec3f pos, funcDef data) {
 	return norm(add(
 		add(
@@ -347,6 +347,7 @@ void march(marchData cellData, cell *lists, funcDef data) {
     vec3f temp, temp1, temp2;
 	growArr triangles = lists->tris;
 	growArr normals = lists->normals;
+	growArr textureCoords = lists->textureCoords;
 
     if (cellData.vals[0] > threshhold) index |= 1;
     if (cellData.vals[1] > threshhold) index |= 2;
@@ -407,6 +408,14 @@ void march(marchData cellData, cell *lists, funcDef data) {
             temp1.x, -temp1.y, temp1.z,
 			temp2.x, -temp2.y, temp2.z
         );
+		temp = scalef(sub(temp, cellData.pos), 1.0 / cellData.size);
+		temp1 = scalef(sub(temp1, cellData.pos), 1.0 / cellData.size);
+		temp2 = scalef(sub(temp2, cellData.pos), 1.0 / cellData.size);
+		textureCoords = pushMultiple(textureCoords, 6,
+			temp.x, temp.z,
+			temp1.x, temp1.z,
+			temp2.x, temp2.z
+		);
         temp = normalList[(int)tris[i]];
         temp1 = normalList[(int)tris[i + 1]];
         temp2 = normalList[(int)tris[i + 2]];
@@ -418,6 +427,7 @@ void march(marchData cellData, cell *lists, funcDef data) {
     }
 	lists->tris = triangles;
 	lists->normals = normals;
+	lists->textureCoords = textureCoords;
     return;
 }
 

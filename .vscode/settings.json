@@ -4,6 +4,8 @@
         "string": "c",
         "string_view": "c",
         "span": "c",
-        "glut.h": "c"
+        "glut.h": "c",
+        "arr.h": "c",
+        "march.h": "c"
     }
 }

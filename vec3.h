@@ -19,5 +19,6 @@ vec3f cross(vec3f, vec3f);
 vec3f vec3fInArray(float*, int);
 float vec3fLength(vec3f);
 vec3f norm(vec3f);
+float dot(vec3f, vec3f);
 
 #endif

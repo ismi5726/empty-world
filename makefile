@@ -1,5 +1,5 @@
 # makefile copied almost entirely in whole from the ex14 makefile
-EXE=hw5
+EXE=hw6
 
 # Main target
 all: $(EXE)
@@ -17,8 +17,8 @@ CFLG=-O3 -Wall -Wno-deprecated-declarations -DRES=$(RES)
 LIBS=-framework GLUT -framework OpenGL
 #  Linux/Unix/Solaris
 else
-#CFLG=-g -Wall
-CFLG=-O3 -Wall
+CFLG=-g -Wall
+#CFLG=-O3 -Wall
 LIBS=-lglut -lGLU -lGL -lm
 endif
 #  OSX/Linux/Unix/Solaris
@@ -26,19 +26,21 @@ CLEAN=rm -f $(EXE) *.o *.a
 endif
 
 # Dependencies
-hw5.o: hw5.c arr.h ball.h cell.h funcs.h march.h quat.h vec3.h shaders.h
+hw6.o: hw6.c arr.h ball.h cell.h funcs.h loadtexbmp.h march.h perlin.h quat.h shaders.h vec3.h
 arr.o: arr.c arr.h
 ball.o: ball.c ball.h vec3.h
-cell.o: cell.c arr.h cell.h funcs.h march.h vec3.h
-funcs.o: funcs.c funcs.h
+cell.o: cell.c arr.h cell.h funcs.h march.h vec3.h loadtexbmp.h
+funcs.o: funcs.c funcs.h perlin.h vec3.h
+loadtexbmp.o: loadtexbmp.c loadtexbmp.h
 march.o: march.c march.h arr.h vec3.h
+perlin.o: perlin.c perlin.h
 quat.o: quat.c quat.h
 queue.o: queue.c queue.h
 shaders.o: shaders.c shaders.h
 vec3.o: vec3.c vec3.h
 
 #  Create archive
-dep.a:arr.o ball.o cell.o funcs.o march.o quat.o queue.o shaders.o vec3.o
+dep.a:arr.o ball.o cell.o funcs.o loadtexbmp.o march.o perlin.o quat.o queue.o shaders.o vec3.o
 		ar -rcs $@ $^
 
 # Compile rules
@@ -48,7 +50,7 @@ dep.a:arr.o ball.o cell.o funcs.o march.o quat.o queue.o shaders.o vec3.o
 		g++ -c $(CFLG)  $<
 
 #  Link
-hw5:hw5.o   dep.a
+hw6:hw6.o   dep.a
 		gcc $(CFLG) -o $@ $^  $(LIBS)
 
 #  Clean
