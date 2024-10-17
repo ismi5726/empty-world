@@ -2,10 +2,11 @@
 
 #include "vec3.h"
 #include "arr.h"
+#include "cell.h"
 typedef struct marchData {
     float vals[8];
     vec3f pos;
     float size;
 } marchData;
 
-growArr march(marchData, growArr, float);
+void march(marchData, cell*, funcDef);

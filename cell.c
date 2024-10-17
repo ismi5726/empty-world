@@ -7,9 +7,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define GL_GLEXT_PROTOTYPES
+#ifdef __APPLE__
+#include <GLUT/glut.h>
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#else
+#include <GL/glut.h>
+#endif
+
 void calculateTris(cell *ptr, funcDef f) {
     //cell c = *ptr;
-    float step = 1.0 / (1 << ptr->lod);
+    float step = 4.0 / (1 << ptr->lod);
     vec3f areasize = scalef(ptr->size, 1 / step);
     areasize.x++;areasize.y++;areasize.z++;
     int arrSize = areasize.x * areasize.y * areasize.z;
@@ -46,12 +54,20 @@ void calculateTris(cell *ptr, funcDef f) {
                     influence[n + 1 + (int)areasize.x + (int)(areasize.x * areasize.y)], influence[n + (int)areasize.x + (int)(areasize.x * areasize.y)],
                 }, pos, (float)step};
                 n++;
-                ptr->tris = march(cellData, ptr->tris, f.threshhold);
+                march(cellData, ptr, f);
             }
             n++;
         }
         n += areasize.x;
     }
+
+    glBindBuffer(GL_ARRAY_BUFFER, ptr->buffers[0]);
+    glBufferData(GL_ARRAY_BUFFER, ptr->tris.size * sizeof(float), ptr->tris.data, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ARRAY_BUFFER, ptr->buffers[1]);
+    glBufferData(GL_ARRAY_BUFFER, ptr->normals.size * sizeof(float), ptr->normals.data, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 float cellDistance(cell *ptr, vec3f pos) {
@@ -84,6 +100,7 @@ int roughCellDistance(cell *ptr, vec3f pos) {
 vec3f cellPos(vec3f pos) {
     pos = scalef(pos, 1.0 / 16);
     pos.x = (int)pos.x; pos.y = (int)pos.y; pos.z = (int)pos.z;
+    return pos;
 }
 
 void delCell(cell *ptr) {
@@ -101,6 +118,7 @@ void delCell(cell *ptr) {
     if (c.prevZ) {
         c.prevZ->nextZ = NULL;
     }
+    glDeleteBuffers(2, ptr->buffers);
     free(ptr);
 }
 
@@ -115,8 +133,10 @@ cell *createCell(vec3f pos, vec3f size) {
 
     //cell c = *ptr;
     ptr->tris = createArr();
+    ptr->normals = createArr();
     ptr->pos = pos;
     ptr->size = size;
     ptr->needsRender = 1;
+    glGenBuffers(2, ptr->buffers);
     return ptr;
 }

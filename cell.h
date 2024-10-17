@@ -9,6 +9,8 @@ typedef struct cell {
     int lod;
     int needsRender;
     growArr tris;
+    growArr normals;
+    unsigned int buffers[2];
     struct cell *nextX;
     struct cell *nextZ;
     struct cell *prevX;

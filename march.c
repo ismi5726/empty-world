@@ -1,6 +1,7 @@
 #include "vec3.h"
 #include "arr.h"
 #include "march.h"
+#include "cell.h"
 #include <math.h>
 // marching cubes concept and code (i.e. this entire file) slightly adapted from
 // https://graphics.stanford.edu/~mdfisher/Code/MarchingCubes/MarchingCubes.cpp.html
@@ -312,28 +313,54 @@ vec3f realCornerPos(marchData cell, int index) {
     return add(cell.pos, scalef(cornerPos[index], cell.size));
 }
 
-#define CALC_EDGE(a, b) interpolate(realCornerPos(cell, (a)), realCornerPos(cell, (b)), cell.vals[a] - threshhold, cell.vals[b] - threshhold)
+#define CALC_EDGE(a, b) interpolate(realCornerPos(cellData, (a)), realCornerPos(cellData, (b)), cellData.vals[a] - threshhold, cellData.vals[b] - threshhold)
 
-growArr march(marchData cell, growArr triangles, float threshhold) {
+// algorithm from https://github.com/glslify/glsl-sdf-normal/blob/master/index.glsl,
+// which itself was sourced from https://www.shadertoy.com/view/ldfSWs
+// (I haven't looked at the second link, so it may be dead or otherwise altered)
+const vec3f _v1 = {1, -1, -1};
+const vec3f _v2 = {-1, -1, 1};
+const vec3f _v3 = {-1, 1, -1};
+const vec3f _v4 = {1, 1, 1};
+#define EPS 0.002
+vec3f normalAt(vec3f pos, funcDef data) {
+	return norm(add(
+		add(
+			scalef(_v1, data.influenceAt(add(pos, scalef(_v1, EPS)))),
+			scalef(_v2, data.influenceAt(add(pos, scalef(_v2, EPS))))
+		),
+		add(
+			scalef(_v3, data.influenceAt(add(pos, scalef(_v3, EPS)))),
+			scalef(_v4, data.influenceAt(add(pos, scalef(_v4, EPS))))
+		)
+	));
+}
+#undef EPS
+
+void march(marchData cellData, cell *lists, funcDef data) {
+	float threshhold = data.threshhold;
     int index = 0;
     vec3f vertexList[12];
+	vec3f normalList[12];
     int edges;
     const char *tris;
     vec3f temp, temp1, temp2;
+	growArr triangles = lists->tris;
+	growArr normals = lists->normals;
 
-    if (cell.vals[0] > threshhold) index |= 1;
-    if (cell.vals[1] > threshhold) index |= 2;
-    if (cell.vals[2] > threshhold) index |= 4;
-    if (cell.vals[3] > threshhold) index |= 8;
-    if (cell.vals[4] > threshhold) index |= 16;
-    if (cell.vals[5] > threshhold) index |= 32;
-    if (cell.vals[6] > threshhold) index |= 64;
-    if (cell.vals[7] > threshhold) index |= 128;
+    if (cellData.vals[0] > threshhold) index |= 1;
+    if (cellData.vals[1] > threshhold) index |= 2;
+    if (cellData.vals[2] > threshhold) index |= 4;
+    if (cellData.vals[3] > threshhold) index |= 8;
+    if (cellData.vals[4] > threshhold) index |= 16;
+    if (cellData.vals[5] > threshhold) index |= 32;
+    if (cellData.vals[6] > threshhold) index |= 64;
+    if (cellData.vals[7] > threshhold) index |= 128;
 
     edges = edgeTable[index];
     tris = triTable[index];
     if (edges == 0) {
-        return triangles;
+        return;
     }
 
     if (edges & 1)
@@ -358,8 +385,15 @@ growArr march(marchData cell, growArr triangles, float threshhold) {
         vertexList[9] = CALC_EDGE(1, 5);
     if (edges & 1024)
         vertexList[10] = CALC_EDGE(2, 6);
-    if (edges & 2048)
+    if (edges & 2048) {
         vertexList[11] = CALC_EDGE(3, 7);
+	}
+	
+	for (int i = 0; i < 12; i++) {
+		if (vertexList[i].x != 0 || vertexList[i].y != 0 || vertexList[i].z != 0) {
+			normalList[i] = normalAt(vertexList[i], data);
+		}
+	}
 
     for (int i = 0; tris[i] != -1; i += 3) {
         temp = vertexList[(int)tris[i]];
@@ -371,10 +405,20 @@ growArr march(marchData cell, growArr triangles, float threshhold) {
         triangles = pushMultiple(triangles, 9,
             temp.x, -temp.y, temp.z,
             temp1.x, -temp1.y, temp1.z,
-            temp2.x, -temp2.y, temp2.z
+			temp2.x, -temp2.y, temp2.z
+        );
+        temp = normalList[(int)tris[i]];
+        temp1 = normalList[(int)tris[i + 1]];
+        temp2 = normalList[(int)tris[i + 2]];
+        normals = pushMultiple(normals, 9,
+            temp.x, temp.y, temp.z,
+            temp1.x, temp1.y, temp1.z,
+			temp2.x, temp2.y, temp2.z
         );
     }
-    return triangles;
+	lists->tris = triangles;
+	lists->normals = normals;
+    return;
 }
 
 #undef CALC_EDGE

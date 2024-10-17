@@ -13,7 +13,7 @@ growArr _expand(growArr input) {
     int newSize = input.capacity * 1.5;
     float *data = realloc(input.data, newSize * sizeof(float));
     if (!data) {
-        printf("Allocation failed!\n");
+        printf("Allocation of size %i failed!\n", newSize);
         exit(1);
     }
     growArr out = {newSize, input.size, data};

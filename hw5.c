@@ -102,6 +102,8 @@ int perspective = 0;
 int warp = 0;
 
 int oldT = 0;
+int lightOffset = 0;
+int lightStopped = 0;
 
 typedef struct dodeData {
     float tX;
@@ -164,7 +166,7 @@ void Fatal(const char* format , ...)
 
 void dodecahedron() {
     double phi = (1 + sqrt(5)) / 2;
-    double coords[] = {
+    float coords[] = {
         1, 1, 1,
         1, 1, -1,
         1, -1, 1,
@@ -187,44 +189,158 @@ void dodecahedron() {
         -phi, -1/phi, 0
     };
     char faces[] = {
-        0, 1, 16, 0, 1, 8, 1, 8, 9,
-        1, 3, 13, 1, 3, 16, 3, 16, 17,
-        3, 2, 17, 3, 2, 10, 3, 10, 11,
-        2, 0, 12, 2, 0, 16, 2, 16, 17,
-        4, 5, 18, 4, 5, 8, 5, 8, 9,
-        5, 7, 15, 5, 7, 18, 7, 18, 19,
-        7, 6, 19, 7, 6, 11, 6, 11, 10,
-        6, 4, 14, 6, 4, 18, 6, 18, 19,
-        0, 4, 8, 0, 4, 12, 4, 12, 14,
-        1, 5, 9, 1, 5, 13, 5, 13, 15,
-        2, 6, 10, 2, 6, 14, 2, 14, 12,
-        3, 7, 11, 3, 7, 15, 3, 15, 13
+        0, 16, 1, 0, 1, 8, 1, 9, 8,
+        1, 3, 13, 1, 16, 3, 3, 16, 17,
+        2, 3, 17, 3, 2, 10, 3, 10, 11,
+        2, 0, 12, 2, 16, 0, 2, 17, 16,
+        4, 5, 18, 4, 8, 5, 5, 8, 9,
+        5, 15, 7, 5, 7, 18, 7, 19, 18,
+        7, 6, 19, 7, 11, 6, 6, 11, 10,
+        4, 6, 14, 6, 4, 18, 6, 18, 19,
+        0, 8, 4, 0, 4, 12, 4, 14, 12,
+        1, 5, 9, 1, 13, 5, 5, 13, 15,
+        2, 6, 10, 2, 14, 6, 2, 12, 14,
+        3, 11, 7, 3, 7, 15, 3, 15, 13
     };
-    // colors from ex6.c
+    // colors adapted from ex6.c
     float colors[] = {
-        0.0,0.0,1.0,
-        0.0,1.0,0.0,
-        0.0,1.0,1.0,
-        1.0,0.0,0.0,
-        1.0,0.0,1.0,
-        1.0,1.0,0.0,
-        0.0,0.0,1.0,
-        0.0,1.0,0.0,
-        0.0,1.0,1.0,
-        1.0,0.0,0.0,
-        1.0,0.0,1.0,
-        1.0,1.0,0.0,
-    };
- 
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        0.0, 1.0, 1.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 0.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 0.0, 1.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0,
+        1.0, 1.0, 0.0
+        };
 
-    glVertexPointer(3, GL_DOUBLE, 0, coords);
+   vec3f v[108] = {};
+   vec3f n[108] = {};
+   for (int i = 0; i < 108; i+=3) {
+        vec3f v1 = vec3fInArray(coords, faces[i] * 3);
+        vec3f v2 = vec3fInArray(coords, faces[i + 1] * 3);
+        vec3f v3 = vec3fInArray(coords, faces[i + 2] * 3);
+        vec3f normal = cross(sub(v2, v1), sub(v3, v1));
+        v[i] = v1;
+        n[i] = normal;
+        v[i + 1] = v2;
+        n[i + 1] = normal;
+        v[i + 2] = v3;
+        n[i + 2] = normal;
+   }
+
+
+    glVertexPointer(3, GL_FLOAT, 0, v);
     glEnableClientState(GL_VERTEX_ARRAY);
     glColorPointer(3, GL_FLOAT, 0, colors);
     glEnableClientState(GL_COLOR_ARRAY);
-    glColor3f(1.0, 1.0, 1.0);
-    glDrawElements(GL_TRIANGLES, 108, GL_UNSIGNED_BYTE, faces);
+    glNormalPointer(GL_FLOAT, 0, n);
+    glEnableClientState(GL_NORMAL_ARRAY);
+    glShadeModel(GL_SMOOTH);
+    glDrawArrays(GL_TRIANGLES, 0, 108);
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
 }
 
 void setProjection() {
@@ -259,16 +375,36 @@ void setProjection() {
 void drawGrid() {
     cell *row = corner, *current;
 
-    glEnableClientState(GL_VERTEX_ARRAY);
+    //glEnableClientState(GL_VERTEX_ARRAY);
+    //glEnableClientState(GL_NORMAL_ARRAY);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
     for (; row; row = row->nextZ) {
         current = row;
         for (; current; current = current->nextX) {
-            glVertexPointer(3, GL_FLOAT, 0, current->tris.data);
+            //glVertexPointer(3, GL_FLOAT, 0, current->tris.data);
+            //glEnableVertexAttribArray(0);
+            //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+            //glNormalPointer(GL_FLOAT, 0, current->normals.data);
+            //glEnableVertexAttribArray(1);
+            //glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+            glBindBuffer(GL_ARRAY_BUFFER, current->buffers[0]);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+            glBindBuffer(GL_ARRAY_BUFFER, current->buffers[1]);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 0, 0);
+
             glDrawArrays(GL_TRIANGLES, 0, current->tris.size / 3);
+            //glDisableVertexAttribArray(0);
+            //glDisableVertexAttribArray(1);
         }
     }
-    glDisableClientState(GL_VERTEX_ARRAY);
+    ErrCheck("drawGrid");
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    //glDisableClientState(GL_NORMAL_ARRAY);
+    //glDisableClientState(GL_VERTEX_ARRAY);
 }
 
 void display() {
@@ -295,13 +431,71 @@ void display() {
     glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, matrix);
     ErrCheck("display1");
     free(matrix);
-    drawGrid();
+    // don't cull backfaces when looking around from afar (looks awkward)
+    if (perspective > 1) {
+        glEnable(GL_CULL_FACE);
+        vec3f lightPos = position;
+        glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
+        drawGrid();
+        glDisable(GL_CULL_FACE);
+    }
+
     glUseProgram(0);
     
+    // much of this part of the code comes from ex13.c
+    float a = 0.2;
+    float amb[4] = {a, a, a, 1};
+    float d = 1;
+    float dif[4] = {d, d, d, 1};
+    float s = 0.5;
+    float spc[4] = {s, s, s, 1};
+    float white[4] = {1.0, 1.0, 1.0, 1.0};
+    float t = oldT - lightOffset;
+    vec3f posVec = {};
+    if (perspective > 1) {
+        vec3f temp = {-position.x, position.y, -position.z};
+        posVec = temp;
+    } else {
+        vec3f temp = {cosf(t / 2000) * 300, 6, sinf(t / 2000) * 300};
+        posVec = temp;
+        glPushMatrix();
+        glTranslatef(temp.x, temp.y, temp.z);
+        glRotatef(cosf(t / 2000), 1, 0, 0);
+        glRotatef(sinf(t / 3000), 0, 1, 1);
+        dodecahedron();
+        glPopMatrix();
+    }
+    float pos[4] = {posVec.x, posVec.y, posVec.z, 1};
+    glEnable(GL_NORMALIZE);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glEnable(GL_COLOR_MATERIAL);
+
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
+    //glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, yellow);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, white);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 128);
+    glLightfv(GL_LIGHT0, GL_AMBIENT, amb);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, dif);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, spc);
+
+    if (perspective > 1) {
+        // makes this roughly equal to the terrain, except the dodes are shinier
+        glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0);
+        glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.022);
+        glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.0019);
+    }
+
     for (int i = 0; i < nDodes; i++) {
         glPushMatrix();
         glTranslatef(dodes[i].tX, 0, dodes[i].tZ);
         glScalef(dodes[i].scale, dodes[i].scale, dodes[i].scale);
+        if (perspective < 2) {
+            float tempPos[4] = {pos[0] - dodes[i].tX, pos[1], pos[2] - dodes[i].tZ, pos[3]};
+            glLightfv(GL_LIGHT0, GL_POSITION, tempPos);
+        }
         glRotatef(dodes[i].rX, 1, 0, 0);
         glRotatef(dodes[i].rY, 0, 1, 0);
         glRotatef(dodes[i].rZ, 0, 0, 1);
@@ -309,6 +503,7 @@ void display() {
         glPopMatrix();
     }
     // draw a nice grassy field so it looks like we're walking
+    /*
     if (perspective > 1) {
         glColor3f(0.05, 0.6, 0.1);
         glBegin(GL_TRIANGLES);
@@ -319,7 +514,16 @@ void display() {
         glVertex3f(100 - position.x, -2, 100 - position.z);
         glVertex3f(-100 - position.x, -2, 100 - position.z);
         glEnd();
-    }
+    }//*/
+    glLightfv(GL_LIGHT0, GL_POSITION, pos);
+    glShadeModel(GL_FLAT);
+    dodecahedron();
+
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_LIGHT0);
+    glDisable(GL_COLOR_MATERIAL);
+    glDisable(GL_NORMALIZE);
 
     double gridSize = dim / 10;
     double offset = 2 * (dim / dimInit);
@@ -354,6 +558,7 @@ void display() {
 
     glWindowPos2i(5, 5);
     Print(state[perspective]);
+    ErrCheck("display");
 
     glFlush();
     glutSwapBuffers();
@@ -419,7 +624,7 @@ void key(unsigned char key, int x, int y) {
             printf("%s\n", "Thanks for playing :) ");
             exit(0);
             break;
-        case 'm':
+        case 'p':
             perspective++;
             perspective %= 4;
             switch (perspective) {
@@ -466,6 +671,9 @@ void key(unsigned char key, int x, int y) {
             offsetY = 0;
             rotation = identity;
             dim = dimInit;
+            break;
+        case 'o':
+            lightStopped = 1 - lightStopped;
             break;
     }
 }
@@ -570,6 +778,9 @@ void idle() {
             }
         }
         oldT += 1000 / 60.0;
+        if (lightStopped) {
+            lightOffset += 1000 / 60.0;
+        }
     }
     cell *toRender = peek(cellQueue);
     if (toRender) {
