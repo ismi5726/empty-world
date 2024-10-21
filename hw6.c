@@ -68,10 +68,10 @@ int onFloor = 0;
 double phi = -30;
 double theta = 45;
 
-double dim = 3;
+double dim = 300;
 // used during resets
 double dimInit;
-double clipPlane = 200;
+double clipPlane = 500;
 // these are useful to have for other calculations
 double asp = 1;
 // horizontal aspect ratio - 1 if taller than wide, otherwise asp
@@ -118,6 +118,9 @@ char state[][20] = {"Ortho", "Perspective", "Walking (outside)", "Walking"};
 
 int groundTexture;
 int crateTexture;
+int sunTexture;
+int textures[3];
+int textureIndex = 0;
 
 void createGrid(int, int);
 void clearGrid();
@@ -205,21 +208,41 @@ void dodecahedron() {
         0.75, 0, 0,
         0, 0.75, 0,
     };
+    float faceTexture2[] = {
+        0.5, 1, 0,
+        1, 1, 0,
+        1, 0, 0,
+        0, 0, 0,
+        0, 1, 0,
+        0.5, 0.5, 0,
+    };
+    float faceTexture3[] = {
+        0, 1 / phi, 0,
+        1, 1 / phi, 0,
+        0.5, 1, 0,
+        0, 1 / phi, 0,
+        1, 1 / phi, 0,
+        1 - phi / 2, 0, 0,
+        1, 1 / phi, 0,
+        phi / 2, 0, 0,
+        1 - phi / 2, 0, 0,
+    };
     char faces[] = {
-        1, 0, 16, 0, 1, 8, 1, 9, 8,
+        0, 1, 16, 0, 1, 8, 1, 9, 8,
         1, 3, 13, 1, 3, 16, 3, 17, 16, 
-        2, 3, 17, 3, 2, 11, 2, 10, 11,
-        2, 0, 12, 0, 2, 16, 2, 17, 16,
+        3, 2, 17, 3, 2, 11, 2, 10, 11,
+        0, 2, 12, 0, 2, 16, 2, 17, 16,
         4, 5, 18, 4, 5, 8, 5, 9, 8, 
-        7, 5, 15, 5, 7, 18, 7, 19, 18,
+        5, 7, 15, 5, 7, 18, 7, 19, 18,
         7, 6, 19, 7, 6, 11, 6, 10, 11, 
         4, 6, 14, 4, 6, 18, 6, 19, 18, 
         0, 4, 8, 0, 4, 12, 4, 14, 12,
         1, 5, 9, 1, 5, 13, 5, 15, 13, 
-        2, 6, 10, 6, 2, 14, 2, 12, 14,
+        6, 2, 10, 6, 2, 14, 2, 12, 14,
         7, 3, 11, 7, 3, 15, 3, 13, 15 
     };
     // the faces from above, after having been sorted around their centers and de-duplicated
+    // sorted using algorithm from https://stackoverflow.com/a/47956568
     char faces2[] = {
         16,0,8,9,1,
         13,3,17,16,1,
@@ -346,106 +369,80 @@ void dodecahedron() {
         1.0, 1.0, 0.0
     };
 
-   //const int f = 108;
-   const int f = 108 * 15 / 9;
-   vec3f v[f] = {};
-   vec3f n[f] = {};
-   //float t[216] = {};
-   vec3f t[f] = {};
-   vec3f c[f] = {};
-   int k = 0;
-   for (int i = 0; i < 60; i += 5) {
-        /*vec3f v1 = vec3fInArray(coords, faces[i] * 3);
-        vec3f v3 = vec3fInArray(coords, faces[i + 1] * 3);
-        vec3f v2 = vec3fInArray(coords, faces[i + 2] * 3);
-        vec3f v4, v5;
-        if (1 || faces[i+2] > faces[i + 5]) {
-            v4 = vec3fInArray(coords, faces[i + 5] * 3);
-            v5 = vec3fInArray(coords, faces[i + 7] * 3);
-        } else {
-            v5 = vec3fInArray(coords, faces[i + 5] * 3);
-            v4 = vec3fInArray(coords, faces[i + 7] * 3);
-        }*/
-        /*vec3f v1 = vec3fInArray(coords, faces[i] * 3);
-        vec3f v2 = vec3fInArray(coords, faces[i + 1] * 3);
-        vec3f v3 = vec3fInArray(coords, faces[i + 2] * 3);
-        vec3f v4 = vec3fInArray(coords, faces[i + 5] * 3);
-        vec3f v5 = vec3fInArray(coords, faces[i + 7] * 3);
-        vec3f normal = cross(sub(v2, v1), sub(v3, v1));
-        vec3f center = scalef(add(add(add(v1, v2), add(v3, v4)), v5), 1.0 / 5.0);
-        dodeFaceArb = sub(v1, center);
-        dodeFaceCenter = center;
-        dodeFacePart = cross(dodeFaceArb, center);
-        vec3f vecs[5] = {v1, v2, v3, v4, v5};
-        qsort(vecs, 5, sizeof(vec3f), pointSort);
-        if (first) {
-            vec3f vecs2[5] = {v1, v2, v3, v4, v5};
-            int offsets[5] = {0, 1, 2, 5, 7};
-            for (int j = 0; j < 5; j++) {
-                for (int k = 0; k < 5; k++) {
-                    if (vecs[j].x == vecs2[k].x && vecs[j].y == vecs2[k].y && vecs[j].z == vecs2[k].z) {
-                        printf("%i,", faces[i + offsets[k]]);
-                        //break;
-                    }
-                }
-            }
-            printf("\n");
-        }*/
-        vec3f v1 = vec3fInArray(coords, faces2[i] * 3);
-        vec3f v2 = vec3fInArray(coords, faces2[i + 1] * 3);
-        vec3f v3 = vec3fInArray(coords, faces2[i + 2] * 3);
-        vec3f v4 = vec3fInArray(coords, faces2[i + 3] * 3);
-        vec3f v5 = vec3fInArray(coords, faces2[i + 4] * 3);
-        vec3f normal = cross(sub(v2, v1), sub(v3, v1));
-        vec3f center = scalef(add(add(add(v1, v2), add(v3, v4)), v5), 1.0 / 5.0);
-        vec3f vecs[5] = {v1, v2, v3, v4, v5};
-        for (int j = 0; j < 5; j++) {
-            v[k] = vecs[j];
-            c[k] = vec3fInArray(colors, i * 27 / 5);
-            n[k++] = normal;
-            c[k] = vec3fInArray(colors, i * 27 / 5);
-            v[k] = vecs[(j + 1) % 5];
-            n[k++] = normal;
-            v[k] = center;
-            c[k] = vec3fInArray(colors, i * 27 / 5);
-            n[k++] = normal;
-        }
-   }
-   first = 0;
-   /*
-   for (int i = 0; i < f; i+=3) {
-        vec3f v1 = vec3fInArray(coords, faces[i] * 3);
-        vec3f v2 = vec3fInArray(coords, faces[i + 1] * 3);
-        vec3f v3 = vec3fInArray(coords, faces[i + 2] * 3);
-        vec3f normal = cross(sub(v2, v1), sub(v3, v1));
-        v[i] = v1;
-        n[i] = normal;
-        v[i + 1] = v2;
-        n[i + 1] = normal;
-        v[i + 2] = v3;
-        n[i + 2] = normal;
-        int j = i % 9;
-        vec3f texCoords;
-        texCoords = vec3fInArray(faceTexture, j++ * 3);
-        t[i] = texCoords;
-        texCoords = vec3fInArray(faceTexture, j++ * 3);
-        t[i + 1] = texCoords;
-        texCoords = vec3fInArray(faceTexture, j++ * 3);
-        t[i + 2] = texCoords;
-   }
-   */
-
-
-    glVertexPointer(3, GL_FLOAT, 0, v);
     glEnableClientState(GL_VERTEX_ARRAY);
-    glColorPointer(3, GL_FLOAT, 0, c);
     glEnableClientState(GL_COLOR_ARRAY);
-    glNormalPointer(GL_FLOAT, 0, n);
     glEnableClientState(GL_NORMAL_ARRAY);
-    glTexCoordPointer(3, GL_FLOAT, 0, t);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glShadeModel(GL_SMOOTH);
-    glDrawArrays(GL_TRIANGLES, 0, f);
+    vec3f v[180] = {0};
+    vec3f n[180] = {0};
+    vec3f t[180] = {0};
+    vec3f c[180] = {0};
+    if (mode == 1) {
+        const int f = 108 * 15 / 9;
+        int k = 0;
+        for (int i = 0; i < 60; i += 5) {
+            vec3f v1 = vec3fInArray(coords, faces2[i] * 3);
+            vec3f v2 = vec3fInArray(coords, faces2[i + 1] * 3);
+            vec3f v3 = vec3fInArray(coords, faces2[i + 2] * 3);
+            vec3f v4 = vec3fInArray(coords, faces2[i + 3] * 3);
+            vec3f v5 = vec3fInArray(coords, faces2[i + 4] * 3);
+            vec3f normal = cross(sub(v2, v1), sub(v3, v1));
+            vec3f center = scalef(add(add(add(v1, v2), add(v3, v4)), v5), 1.0 / 5.0);
+            vec3f vecs[5] = {v1, v2, v3, v4, v5};
+            for (int j = 0; j < 5; j++) {
+                v[k] = vecs[j];
+                c[k] = vec3fInArray(colors, i * 27 / 5);
+                t[k] = vec3fInArray(faceTexture2, ((j) % 5) * 3);
+                n[k++] = normal;
+                c[k] = vec3fInArray(colors, i * 27 / 5);
+                t[k] = vec3fInArray(faceTexture2, ((j + 1) % 5) * 3);
+                v[k] = vecs[(j + 1) % 5];
+                n[k++] = normal;
+                c[k] = vec3fInArray(colors, i * 27 / 5);
+                t[k] = vec3fInArray(faceTexture2, 5 * 3);
+                v[k] = center;
+                n[k++] = normal;
+            }
+        }
+
+        glVertexPointer(3, GL_FLOAT, 0, v);
+        glColorPointer(3, GL_FLOAT, 0, c);
+        glNormalPointer(GL_FLOAT, 0, n);
+        glTexCoordPointer(3, GL_FLOAT, 0, t);
+        glShadeModel(GL_SMOOTH);
+        glDrawArrays(GL_TRIANGLES, 0, f);
+    } else {
+        const int f = 108;
+        float *ft = mode ? faceTexture3 : faceTexture;
+        for (int i = 0; i < f; i+=3) {
+            vec3f v1 = vec3fInArray(coords, faces[i] * 3);
+            vec3f v2 = vec3fInArray(coords, faces[i + 1] * 3);
+            vec3f v3 = vec3fInArray(coords, faces[i + 2] * 3);
+            vec3f normal = cross(sub(v2, v1), sub(v3, v1));
+            v[i] = v1;
+            n[i] = normal;
+            v[i + 1] = v2;
+            n[i + 1] = normal;
+            v[i + 2] = v3;
+            n[i + 2] = normal;
+            int j = i % 9;
+            vec3f texCoords;
+            texCoords = vec3fInArray(ft, j++ * 3);
+            t[i] = texCoords;
+            texCoords = vec3fInArray(ft, j++ * 3);
+            t[i + 1] = texCoords;
+            texCoords = vec3fInArray(ft, j++ * 3);
+            t[i + 2] = texCoords;
+        }
+
+        glVertexPointer(3, GL_FLOAT, 0, v);
+        glColorPointer(3, GL_FLOAT, 0, colors);
+        glNormalPointer(GL_FLOAT, 0, n);
+        glTexCoordPointer(3, GL_FLOAT, 0, t);
+        glShadeModel(GL_SMOOTH);
+        glDrawArrays(GL_TRIANGLES, 0, f);
+    }
+
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_NORMAL_ARRAY);
@@ -558,9 +555,9 @@ void display() {
     float spc[4] = {s, s, s, 1};
     float white[4] = {1.0, 1.0, 1.0, 1.0};
     float t = oldT - lightOffset;
-    vec3f posVec = {};
+    vec3f posVec = {0};
     if (perspective > 1) {
-        vec3f temp = {-position.x, -position.y, -position.z};
+        vec3f temp = {-position.x, position.y + 4, -position.z};
         posVec = temp;
     } else {
         vec3f temp = {cosf(t / 2000) * 300, 6, sinf(t / 2000) * 300};
@@ -569,7 +566,10 @@ void display() {
         glTranslatef(temp.x, temp.y, temp.z);
         glRotatef(cosf(t / 2000), 1, 0, 0);
         glRotatef(sinf(t / 3000), 0, 1, 1);
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, sunTexture);
         dodecahedron();
+        glDisable(GL_TEXTURE_2D);
         glPopMatrix();
     }
     float pos[4] = {posVec.x, posVec.y, posVec.z, 1};
@@ -579,11 +579,11 @@ void display() {
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_COLOR_MATERIAL);
 
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 0);
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
     //glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, yellow);
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, white);
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 128);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32);
     glLightfv(GL_LIGHT0, GL_AMBIENT, amb);
     glLightfv(GL_LIGHT0, GL_DIFFUSE, dif);
     glLightfv(GL_LIGHT0, GL_SPECULAR, spc);
@@ -596,7 +596,8 @@ void display() {
     }
 
     glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, crateTexture);
+    glBindTexture(GL_TEXTURE_2D, textures[textureIndex]);
+    glLightfv(GL_LIGHT0, GL_POSITION, pos);
     for (int i = 0; i < nDodes; i++) {
         glPushMatrix();
         glTranslatef(dodes[i].tX, 0, dodes[i].tZ);
@@ -613,7 +614,7 @@ void display() {
     }
     glLightfv(GL_LIGHT0, GL_POSITION, pos);
     glShadeModel(GL_FLAT);
-    //dodecahedron();
+    dodecahedron();
     glDisable(GL_TEXTURE_2D);
 
     glDisable(GL_CULL_FACE);
@@ -621,7 +622,7 @@ void display() {
     glDisable(GL_LIGHT0);
     glDisable(GL_COLOR_MATERIAL);
     glDisable(GL_NORMALIZE);
-    dodecahedron();
+    //dodecahedron();
 
     double gridSize = dim / 10;
     double offset = 2 * (dim / dimInit);
@@ -713,7 +714,9 @@ void entry(int state) {
     isInside = state;
 }
 
-void key(unsigned char key, int x, int y) {
+void key(unsigned char key, int _x, int _y) {
+    (void)(_x);
+    (void)(_y);
     switch (key) {
         // exit on 'Q' or escape (was listed as a nice thing to do)
         case 'q':
@@ -729,10 +732,10 @@ void key(unsigned char key, int x, int y) {
                 case 2:
                     position = pos1;
                     perspective++;
+                    // fall through
                 case 3:
                     pos1 = position;
                     position = pos2;
-                    mode = 0;
                     break;
                 case 0:
                     pos2 = position;
@@ -741,6 +744,14 @@ void key(unsigned char key, int x, int y) {
             velocity = vZero;
             acceleration = vZero;
             setProjection();
+            break;
+        case 'm':
+            mode++;
+            mode %= 3;
+            break;
+        case 't':
+            textureIndex++;
+            textureIndex %= 3;
             break;
         case 'w':
         case 'a':
@@ -776,7 +787,9 @@ void key(unsigned char key, int x, int y) {
     }
 }
 
-void keyUp(unsigned char key, int x, int y) {
+void keyUp(unsigned char key, int _x, int _y) {
+    (void)(_x);
+    (void)(_y);
     if (key == keyDown) {
         keyDown = 0;
     }
@@ -1000,6 +1013,10 @@ int main(int argc, char* argv[]) {
     }
     groundTexture = LoadTexBMP("ground.bmp", GL_NEAREST);
     crateTexture = LoadTexBMP("crate.bmp", GL_LINEAR);
+    sunTexture = LoadTexBMP("sun.bmp", GL_LINEAR);
+    textures[0] = crateTexture;
+    textures[1] = sunTexture;
+    textures[2] = groundTexture;
     createGrid(0, 0);
     //terrain = sineHill;
     terrain = perlin;
