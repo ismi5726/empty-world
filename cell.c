@@ -32,7 +32,7 @@ void calculateTris(cell *ptr, funcDef f) {
             for (float x = ptr->pos.x; x <= ptr->pos.x + ptr->size.x; x += step) {
                 pos.x = x;
                 if (n >= arrSize) {
-                    printf("warning: influence array not big enough; could not calculate tris!");
+                    printf("warning: influence array not big enough; could not calculate tris!\n");
                     return;
                 }
                 influence[n++] = f.influenceAt(pos);
@@ -104,6 +104,11 @@ int roughCellDistance(cell *ptr, vec3f pos) {
     return (int)(tot.x + tot.y + tot.z);
 }
 
+int roughCellDistance2(cell *ptr, vec3f pos) {
+    vec3f tot = scalev3f(vAbs(sub(ptr->pos, pos)), inv(ptr->size));
+    return (int)((tot.x > tot.z) ? tot.x : tot.z);
+}
+
 vec3f cellPos(vec3f pos) {
     pos = scalef(pos, 1.0 / 16);
     pos.x = (int)pos.x; pos.y = (int)pos.y; pos.z = (int)pos.z;
@@ -113,6 +118,8 @@ vec3f cellPos(vec3f pos) {
 void delCell(cell *ptr) {
     cell c = *ptr;
     delArr(c.tris);
+    delArr(c.normals);
+    delArr(c.textureCoords);
     if (c.nextX) {
         c.nextX->prevX = NULL;
     }
@@ -125,7 +132,7 @@ void delCell(cell *ptr) {
     if (c.prevZ) {
         c.prevZ->nextZ = NULL;
     }
-    glDeleteBuffers(2, ptr->buffers);
+    glDeleteBuffers(3, ptr->buffers);
     free(ptr);
 }
 

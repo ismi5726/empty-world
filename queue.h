@@ -7,5 +7,6 @@ typedef struct queue {
 } queue;
 
 queue *enqueue(queue *q, void *data, int priority);
+queue *dequeue(queue *q, void *data);
 void *peek(queue *q);
 queue *pop(queue *q);

@@ -25,6 +25,28 @@ queue *enqueue(queue *q, void *data, int priority) {
     }
 }
 
+queue *dequeue(queue *q, void *data) {
+    if (!q) return q;
+    queue *temp, *current;
+    while (q->data == data) {
+        temp = q->next;
+        free(q);
+        q = temp;
+    }
+    temp = q;
+    current = q->next;
+    for (; current; current = current->next) {
+        if (current->data == data) {
+            temp->next = current->next;
+            free(current);
+            current = temp->next;
+            if (!current) break;
+        }
+        temp = current;
+    }
+    return q;
+}
+
 void *peek(queue *q) {
     if (!q) return NULL;
     return q->data;

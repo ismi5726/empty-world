@@ -94,7 +94,7 @@ int renderDistance = 25;
 queue *cellQueue;
 
 int mode = 0;
-int perspective = 0;
+int perspective = 3;
 // for blocking the movement event from warpPointer
 int warp = 0;
 

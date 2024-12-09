@@ -21,5 +21,7 @@ typedef struct cell {
 void calculateTris(cell *ptr, funcDef f);
 float cellDistance(cell *ptr, vec3f pos);
 int roughCellDistance(cell *ptr, vec3f pos);
+int roughCellDistance2(cell *ptr, vec3f pos);
 void delCell(cell *ptr);
 cell *createCell(vec3f pos, vec3f size);
+vec3f cellPos(vec3f pos);

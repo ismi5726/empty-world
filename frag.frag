@@ -16,15 +16,16 @@ void main() {
     //vec4 pixelColor = texe
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(lightPos + FragPos);
+    float specularFactor = 1.15 - vertexColor.r;
 
-    float diff = max(dot(norm, lightDir), 0.0);
+    float diff = max(dot(norm, lightDir), 0.0) * specularFactor;
     vec3 diffuse = vec3(diff);
-    vec3 ambient = vec3(0.1);
+    vec3 ambient = vec3(0.4);
 
-    float specularStrength = 0.5;
+    float specularStrength = specularFactor / 2;
     vec3 viewDir = lightDir;
     vec3 reflectDir = reflect(-lightDir, norm);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16 * specularFactor);
     vec3 specular = specularStrength * spec * vec3(1.0, 1.0, 1.0);
 
     float distance = length(lightPos + FragPos);
