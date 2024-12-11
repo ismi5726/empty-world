@@ -26,21 +26,24 @@ CLEAN=rm -f $(EXE) *.o *.a
 endif
 
 # Dependencies
-project-1.o: project-1.c arr.h ball.h cell.h funcs.h loadtexbmp.h march.h perlin.h quat.h shaders.h vec3.h
+project-1.o: project-1.c arr.h ball.h cell.h funcs.h loadtexbmp.h march.h perlin.h quat.h shaders.h text.h tree.h vec3.h
 arr.o: arr.c arr.h
 ball.o: ball.c ball.h vec3.h
-cell.o: cell.c arr.h cell.h funcs.h march.h queue.h vec3.h loadtexbmp.h
+cell.o: cell.c arr.h cell.h funcs.h march.h queue.h tree.h vec3.h loadtexbmp.h
 funcs.o: funcs.c funcs.h perlin.h vec3.h
 loadtexbmp.o: loadtexbmp.c loadtexbmp.h
 march.o: march.c march.h arr.h vec3.h
+objects.o: objects.c objects.h arr.h quat.h vec3.h
 perlin.o: perlin.c perlin.h
 quat.o: quat.c quat.h
 queue.o: queue.c queue.h
 shaders.o: shaders.c shaders.h
+text.o: text.c text.h
+tree.o: tree.c tree.h arr.h objects.h vec3.h perlin.h
 vec3.o: vec3.c vec3.h
 
 #  Create archive
-dep.a:arr.o ball.o cell.o funcs.o loadtexbmp.o march.o perlin.o quat.o queue.o shaders.o vec3.o
+dep.a:arr.o ball.o cell.o funcs.o loadtexbmp.o march.o objects.o perlin.o quat.o queue.o shaders.o text.o tree.o vec3.o
 		ar -rcs $@ $^
 
 # Compile rules

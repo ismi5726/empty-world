@@ -7,6 +7,7 @@ typedef struct marchData {
     float vals[8];
     vec3f pos;
     float size;
+    int isOutside;
 } marchData;
 
 void march(marchData, cell*, funcDef);

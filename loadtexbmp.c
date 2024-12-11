@@ -44,11 +44,18 @@ static void Reverse(void* x,const int n)
    }
 }
 
+typedef struct image {
+   int dx;
+   int dy;
+   int off;
+   int k;
+   unsigned char *image;
+} image;
+
 //
 //  Load texture from BMP file
 //
-unsigned int LoadTexBMP(const char* file, int mode)
-{
+image LoadBMP(const char *file) {
    //  Open file
    FILE* f = fopen(file,"rb");
    if (!f) Fatal("Cannot open file %s\n",file);
@@ -57,6 +64,7 @@ unsigned int LoadTexBMP(const char* file, int mode)
    if (fread(&magic,2,1,f)!=1) Fatal("Cannot read magic from %s\n",file);
    if (magic!=0x4D42 && magic!=0x424D) Fatal("Image magic not BMP in %s\n",file);
    //  Read header
+   image tex;
    unsigned int dx,dy,off,k; // Image dimensions, offset and compression
    unsigned short nbp,bpp;   // Planes and bits per pixel
    if (fseek(f,8,SEEK_CUR) || fread(&off,4,1,f)!=1 ||
@@ -91,34 +99,66 @@ unsigned int LoadTexBMP(const char* file, int mode)
 
    //  Allocate image memory
    unsigned int size = 3*dx*dy;
-   unsigned char* image = (unsigned char*) malloc(size);
-   if (!image) Fatal("Cannot allocate %d bytes of memory for image %s\n",size,file);
+   //unsigned char* image = (unsigned char*) malloc(size);
+   tex.image = (unsigned char *) malloc(size);
+   if (!tex.image) Fatal("Cannot allocate %d bytes of memory for image %s\n",size,file);
    //  Seek to and read image
-   if (fseek(f,off,SEEK_SET) || fread(image,size,1,f)!=1) Fatal("Error reading data from image %s\n",file);
+   if (fseek(f,off,SEEK_SET) || fread(tex.image,size,1,f)!=1) Fatal("Error reading data from image %s\n",file);
    fclose(f);
    //  Reverse colors (BGR -> RGB)
    for (k=0;k<size;k+=3)
    {
-      unsigned char temp = image[k];
-      image[k]   = image[k+2];
-      image[k+2] = temp;
+      unsigned char temp = tex.image[k];
+      tex.image[k]   = tex.image[k+2];
+      tex.image[k+2] = temp;
    }
 
    //  Sanity check
-   ErrCheck("LoadTexBMP");
+   ErrCheck("LoadBMP");
+   tex.dx = dx;
+   tex.dy = dy;
+   tex.k = k;
+   tex.off = off;
+   return tex;
+}
+
+// put bmp in 2d texture
+unsigned int LoadTexBMP(const char* file, int mode)
+{
+   image tex = LoadBMP(file);
    //  Generate 2D texture
    unsigned int texture;
    glGenTextures(1,&texture);
    glBindTexture(GL_TEXTURE_2D,texture);
    //  Copy image
-   glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,dx,dy,0,GL_RGB,GL_UNSIGNED_BYTE,image);
-   if (glGetError()) Fatal("Error in glTexImage2D %s %dx%d\n",file,dx,dy);
+   glTexImage2D(GL_TEXTURE_2D,0,GL_RGB,tex.dx,tex.dy,0,GL_RGB,GL_UNSIGNED_BYTE,tex.image);
+   if (glGetError()) Fatal("Error in glTexImage2D %s %dx%d\n",file,tex.dx,tex.dy);
    //  Scale linearly when image size doesn't match
    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,mode);
    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,mode);
 
    //  Free image memory
-   free(image);
+   free(tex.image);
    //  Return texture name
+   return texture;
+}
+
+// load a cubemap
+unsigned int LoadCubemapBMP(char** files, int mode) {
+   unsigned int texture;
+   glGenTextures(1, &texture);
+   glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+   image tex;
+   for (int i = 0; i < 6; i++) {
+      tex = LoadBMP(files[i]);
+      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, tex.dx, tex.dy, 0, GL_RGB, GL_UNSIGNED_BYTE, tex.image);
+      free(tex.image);
+   }
+   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, mode);
+   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, mode);
+   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
    return texture;
 }

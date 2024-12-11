@@ -13,7 +13,6 @@
 //#include <SDL2/SDL_mixer>
 #elif defined(__APPLE__)
 #include <GLUT/glut.h>
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #else
 #include <GL/glut.h>
 #endif
@@ -44,6 +43,9 @@
 #include "queue.h"
 #include "loadtexbmp.h"
 #include "perlin.h"
+#include "text.h"
+//#include "ccVector.h"
+#include "tree.h"
 
 SDL_Window *window = NULL;
 int rate;
@@ -97,6 +99,9 @@ double hAsp = 1;
 double wAsp = 1;
 
 unsigned int ID;
+unsigned int skyboxID;
+unsigned int waterID;
+unsigned int treeID;
 
 funcDef terrain;
 
@@ -113,8 +118,21 @@ int perspective = 3;
 int warp = 0;
 
 int oldT = 0;
+float fps = 60;
 int lightOffset = 0;
 int lightStopped = 0;
+
+// storing all of the necessary matrices for when we need to change them out
+float *modelView;
+float *projection;
+float *screenSpace;
+
+unsigned int refractionBuffer;
+unsigned int reflectionBuffer;
+unsigned int refractionTexture;
+unsigned int reflectionTexture;
+unsigned int refractionDepth;
+unsigned int reflectionDepth;
 
 typedef struct dodeData {
     float tX;
@@ -129,10 +147,20 @@ typedef struct dodeData {
 dodeData dodes[nDodes];
 
 char state[][20] = {"Ortho", "Perspective", "Walking (outside)", "Walking"};
+char skyboxFiles[][32] = {
+    "skybox/Daylight Box_Right.bmp",
+    "skybox/Daylight Box_Left.bmp",
+    "skybox/Daylight Box_Bottom.bmp",
+    "skybox/Daylight Box_Top.bmp",
+    "skybox/Daylight Box_Front.bmp",
+    "skybox/Daylight Box_Back.bmp"
+};
 
 int groundTexture;
+int snowTexture;
 int crateTexture;
 int sunTexture;
+int skyboxTexture;
 int textures[3];
 int textureIndex = 0;
 
@@ -154,8 +182,8 @@ void setProjection() {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     if (perspective) {
-        double bottom = tan(60 * 3.14159/360.0) * 0.01;
-        glFrustum(-asp * bottom, asp * bottom, -bottom, bottom, 0.01, dim + clipPlane);
+        double bottom = tan(60 * 3.14159/360.0) * 0.1;
+        glFrustum(-asp * bottom, asp * bottom, -bottom, bottom, 0.1, renderDistance * 16 * 1.1);
         if (perspective == 1) {
             glTranslated(0, 0, -dim * 1.7);
             glRotated(phi, -1, 0, 0);
@@ -196,6 +224,10 @@ void reshape(int w,int h) {
     hAsp = asp < 1 ? 1 : asp;
     // should avoid any divide-by-zero errors
     wAsp = asp < 1 ? (width > 0 ? 1 / asp : 1) : 1;
+    glPushMatrix();
+    glOrtho(0, w, 0, h, -1, 1);
+    glGetFloatv(GL_MODELVIEW_MATRIX, screenSpace);
+    glPopMatrix();
     setProjection();
 }
 
@@ -259,8 +291,14 @@ void key(unsigned char key, int _x, int _y) {
     (void)(_y);
     switch (key) {
         // exit on 'Q' or escape (was listed as a nice thing to do)
-        case 'q':
         case 27:
+            if (hasFocus) {
+                SDL_SetRelativeMouseMode(SDL_FALSE);
+                hasFocus = 0;
+                break;
+            }
+            // fall through
+        case 'q':
             // space here to avoid accidentally doing anything with terminal codes
             printf("%s\n", "Thanks for playing :) ");
             exit(0);
@@ -303,10 +341,17 @@ void key(unsigned char key, int _x, int _y) {
             break;
         // jump with space
         case 32:
-            if (onFloor) {
+            if (onFloor && position.y > -5) {
                 velocity.y -= 5;
                 onFloor = 0;
-            } else {
+            } else if (position.y < -3) {
+                if (position.y < -5) {
+                    acceleration.y -= 0.5;
+                    velocity.y -= 0.4;
+                } else {
+                    acceleration.y -= (position.y + 5) / 4;
+                    velocity.y -= 0.4;
+                }
             }
             break;
         case '0':
@@ -660,7 +705,10 @@ void drawGrid() {
     glEnableVertexAttribArray(2);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, groundTexture);
-    glUniform1i(glGetUniformLocation(ID, "smplr"), 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, snowTexture);
+    glUniform1i(glGetUniformLocation(ID, "groundSampler"), 0);
+    glUniform1i(glGetUniformLocation(ID, "snowSampler"), 1);
     for (; row; row = row->nextZ) {
         current = row;
         for (; current; current = current->nextX) {
@@ -674,6 +722,252 @@ void drawGrid() {
             glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
             glDrawArrays(GL_TRIANGLES, 0, current->tris.size / 3);
+        }
+    }
+    ErrCheck("drawGrid");
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void drawSkybox() {
+    glDepthFunc(GL_LEQUAL);
+    glUseProgram(skyboxID);
+    float rot2[16];
+    glPushMatrix();
+    glLoadIdentity();
+    double bottom = tan(60 * 3.14159/360.0) * 0.01;
+    glFrustum(-asp * bottom, asp * bottom, -bottom, bottom, 0.01, 4);
+    glRotated(phi, -1, 0, 0);
+    glRotated(theta, 0, -1, 0);
+    glGetFloatv(GL_MODELVIEW_MATRIX, rot2);
+    glPopMatrix();
+    glUniformMatrix4fv(glGetUniformLocation(skyboxID, "projection"), 1, GL_FALSE, rot2);
+    glUniformMatrix4fv(glGetUniformLocation(skyboxID, "modelview"), 1, GL_FALSE, modelView);
+    ErrCheck("skybox-start");
+    float skyboxVertices[] = {
+        // positions          
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+        1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        -1.0f,  1.0f, -1.0f,
+        1.0f,  1.0f, -1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+        1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+        1.0f, -1.0f,  1.0f
+    };
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, skyboxTexture);
+    glUniform1i(glGetUniformLocation(skyboxID, "skybox"), 0);
+
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, 0, skyboxVertices);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glUseProgram(0);
+    ErrCheck("skybox-end");
+}
+
+void drawWater() {
+    int aboveWater = position.y > -5 ? 1 : -1;
+    glEnable(GL_CLIP_DISTANCE0);
+    glBindFramebuffer(GL_FRAMEBUFFER, reflectionBuffer);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glViewport(0, 0, 800, 800);
+    glUseProgram(ID);
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
+    glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, modelView);
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    // flip the camera for the reflection
+    double bottom = tan(60 * 3.14159/360.0) * 0.01;
+    glFrustum(-asp * bottom, asp * bottom, -bottom, bottom, 0.01, renderDistance * 16 * 1.1);
+    glRotated(-phi, -1, 0, 0);
+    glRotated(theta, 0, -1, 0);
+    glTranslatef(position.x, position.y + 6, position.z);
+    //glTranslatef(0, 2 * position.y + 6, 0);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, projection);
+    glMatrixMode(GL_MODELVIEW);
+    glUniform4f(glGetUniformLocation(ID, "plane"), 0, aboveWater, 0, aboveWater == 1 ? 1 : 0.5);
+    //glEnable(GL_CULL_FACE);
+    vec3f lightPos = position;
+    lightPos.y += 4;
+    glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
+    drawGrid();
+    glDisable(GL_CULL_FACE);
+    phi = -phi;
+    drawSkybox();
+    phi = -phi;
+    drawTree();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    //glColor3f(1, 0, 1);
+    //print2D(5, 5, "Hello", 48);
+    //printf("%i\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
+
+    glBindFramebuffer(GL_FRAMEBUFFER, refractionBuffer);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glViewport(0, 0, 800, 800);
+    glUseProgram(ID);
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
+    glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, modelView);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, projection);
+    glUniform4f(glGetUniformLocation(ID, "plane"), 0, -aboveWater, 0, aboveWater == 1 ? 0.5 : 1.5);
+    //glEnable(GL_CULL_FACE);
+    glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
+    drawGrid();
+    glDisable(GL_CULL_FACE);
+    drawSkybox();
+    drawTree();
+    glDisable(GL_CLIP_DISTANCE0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    reshape(width, height);
+    glUseProgram(waterID);
+    float rot2[16];
+    glPushMatrix();
+    glLoadIdentity();
+    //double bottom = tan(60 * 3.14159/360.0) * 0.01;
+    glFrustum(-asp * bottom, asp * bottom, -bottom, bottom, 0.01, 4);
+    glRotated(phi, -1, 0, 0);
+    glRotated(theta, 0, -1, 0);
+    glGetFloatv(GL_MODELVIEW_MATRIX, rot2);
+    glPopMatrix();
+    glUniformMatrix4fv(glGetUniformLocation(waterID, "projection"), 1, GL_FALSE, projection);
+    glUniformMatrix4fv(glGetUniformLocation(waterID, "view"), 1, GL_FALSE, modelView);
+    glUniform3fv(glGetUniformLocation(waterID, "camera"), 1, (float *)&position);
+    glUniform3fv(glGetUniformLocation(waterID, "light"), 1, (float *)&position);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, refractionTexture);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, reflectionTexture);
+    glUniform1i(glGetUniformLocation(waterID, "reflectionTexture"), 0);
+    glUniform1i(glGetUniformLocation(waterID, "refractionTexture"), 1);
+    ErrCheck("water-start");
+    glUniform1f(glGetUniformLocation(waterID, "time"), SDL_GetTicks());
+    int i = renderDistance * 16 * 1.5;
+    float waterVertices[] = {
+        -position.x-i, -1, -position.z-i,
+        -position.x-i, -1, -position.z+i,
+        -position.x+i, -1, -position.z-i,
+        -position.x+i, -1, -position.z-i,
+        -position.x-i, -1, -position.z+i,
+        -position.x+i, -1, -position.z+i
+    };
+
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, 0, waterVertices);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glUseProgram(0);
+    ErrCheck("water-end");//*/
+    /*ErrCheck("water");
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, reflectionBuffer);
+    glBlitFramebuffer(0, 0, 800, 800, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);//*/
+    glDisable(GL_POLYGON_OFFSET_FILL);
+}
+
+void drawTree() {
+    /*glUseProgram(treeID);
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
+    glUniformMatrix4fv(glGetUniformLocation(treeID, "modelview"), 1, GL_FALSE, modelView);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glUniformMatrix4fv(glGetUniformLocation(treeID, "projection"), 1, GL_FALSE, projection);
+    glUniform4f(glGetUniformLocation(treeID, "plane"), 0, 0, 0, 0);
+    vec3f lightPos = position;
+    lightPos.y += 4;
+    glUniform3fv(glGetUniformLocation(treeID, "lightPos"), 1, (float *)&lightPos);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, t->tree->buffers[0]);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, t->tree->buffers[1]);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 0, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, t->tree->buffers[2]);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glDrawArrays(GL_TRIANGLES, 0, t->tree->vertices.size / 3);
+    ErrCheck("drawGrid");
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);*/
+    cell *row = corner, *current;
+    glUseProgram(treeID);
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
+    glUniformMatrix4fv(glGetUniformLocation(treeID, "modelview"), 1, GL_FALSE, modelView);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glUniformMatrix4fv(glGetUniformLocation(treeID, "projection"), 1, GL_FALSE, projection);
+    glUniform4f(glGetUniformLocation(treeID, "plane"), 0, 0, 0, 0);
+    vec3f lightPos = position;
+    lightPos.y += 4;
+    glUniform3fv(glGetUniformLocation(treeID, "lightPos"), 1, (float *)&lightPos);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+    for (; row; row = row->nextZ) {
+        current = row;
+        for (; current; current = current->nextX) {
+            if (current->t == NULL) continue;
+            glBindBuffer(GL_ARRAY_BUFFER, current->t->tree->buffers[0]);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+            glBindBuffer(GL_ARRAY_BUFFER, current->t->tree->buffers[1]);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 0, 0);
+
+            glBindBuffer(GL_ARRAY_BUFFER, current->t->tree->buffers[2]);
+            glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+            glDrawArrays(GL_TRIANGLES, 0, current->t->tree->vertices.size / 3);
         }
     }
     ErrCheck("drawGrid");
@@ -701,25 +995,30 @@ void display() {
     }
 
     ErrCheck("display2");
-    float *matrix = calloc(16, sizeof(float));
+    //float *matrix = calloc(16, sizeof(float));
     glUseProgram(ID);
-    glGetFloatv(GL_MODELVIEW_MATRIX, matrix);
-    glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, matrix);
-    glGetFloatv(GL_PROJECTION_MATRIX, matrix);
-    glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, matrix);
+    glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
+    glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, modelView);
+    glGetFloatv(GL_PROJECTION_MATRIX, projection);
+    glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, projection);
+    glUniform4f(glGetUniformLocation(ID, "plane"), 0, 0, 0, 0);
     ErrCheck("display1");
-    free(matrix);
+    //free(matrix);
     // don't cull backfaces when looking around from afar (looks awkward)
-    if (perspective > 1) {
-        //glEnable(GL_CULL_FACE);
-        vec3f lightPos = position;
-        lightPos.y += 4;
-        glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
-        drawGrid();
-        glDisable(GL_CULL_FACE);
-    }
+    //glEnable(GL_CULL_FACE);
+    vec3f lightPos = position;
+    lightPos.y += 4;
+    glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
+    //glEnable(GL_POLYGON_OFFSET_FILL);
+    //glPolygonOffset(1, 10);
+    drawGrid();
+    glDisable(GL_CULL_FACE);
+    drawWater();
+    //drawSomething();
 
     glUseProgram(0);
+
+    drawTree();
     
     // much of this part of the code comes from ex13.c
     float a = 0.2;
@@ -743,7 +1042,7 @@ void display() {
         glRotatef(sinf(t / 3000), 0, 1, 1);
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, sunTexture);
-        dodecahedron();
+        //dodecahedron();
         glDisable(GL_TEXTURE_2D);
         glPopMatrix();
     }
@@ -784,13 +1083,14 @@ void display() {
         glRotatef(dodes[i].rX, 1, 0, 0);
         glRotatef(dodes[i].rY, 0, 1, 0);
         glRotatef(dodes[i].rZ, 0, 0, 1);
-        dodecahedron();
+        //dodecahedron();
         glPopMatrix();
     }
     glLightfv(GL_LIGHT0, GL_POSITION, pos);
     glShadeModel(GL_FLAT);
-    dodecahedron();
+    //dodecahedron();
     glDisable(GL_TEXTURE_2D);
+    drawSkybox();
 
     glDisable(GL_CULL_FACE);
     glDisable(GL_LIGHTING);
@@ -800,49 +1100,53 @@ void display() {
     //dodecahedron();
 
     glLoadIdentity();
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadMatrixf(screenSpace);
 
     glWindowPos2i(5, 5);
-    //Print(state[perspective]);
+    glColor4f(1, 1, 1, 1);
+    print2D(5, 5, state[perspective], 20);
+    char posPrint[50];
+    sprintf(posPrint, "x: %i, y: %i, z: %i", (int)posVec.x, (int)posVec.y, (int)posVec.z);
+    print2D(5, 30, posPrint, 20);
+    sprintf(posPrint, "FPS: %f", fps);
+    print2D(5, 55, posPrint, 20);
+
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
     ErrCheck("display");
 
-    //glFlush();
     SDL_GL_SwapWindow(window);
 }
 
 void updateGrid(vec3f change) {
     if (change.x == 0 && change.z == 0) return;
-    vec3f currentPos = cellPos(scalef(position, -1));
     cell *current = corner;
     cell *next;
     cell *nextRow = current->nextZ;
-    cell *row;
     cell *prev;
     int dist;
     int lod;
     vec3f pos = scalef(position, -1);
-    //printf("currently in %f %f\n", pos.x, pos.z);
     for (; current;) {
         for (; current; current = next) {
             next = current->nextX;
-            //delCell(current);
             dist = roughCellDistance2(current, pos);
             if (current->lod < lods && dist <= lodCutoffs[current->lod]) {
                 current->lod++;
-                //printf("%f %f+; ", current->pos.x, current->pos.z);
                 if (!current->needsRender || dist < 4) {
                     current->needsRender = 1;
                     cellQueue = enqueue(cellQueue, current, roughCellDistance(current, pos));
                 }
-            } else if (dist > (lodCutoffs[current->lod]) * 1.5) {
+            } else if (dist > (lodCutoffs[current->lod]) * 2) {
                 current->lod--;
                 if (current->lod >= 0) {
-                    //printf("%f %f-; ", current->pos.x, current->pos.z);
                     if (!current->needsRender) {
                         current->needsRender = 1;
                         cellQueue = enqueue(cellQueue, current, roughCellDistance(current, pos));
                     }
                 } else {
-                    //printf("del %f %f; ", current->pos.x, current->pos.z);
                     if (current == corner) {
                         if (current->nextX) corner = current->nextX;
                         else corner = nextRow;
@@ -858,16 +1162,16 @@ void updateGrid(vec3f change) {
             nextRow = current->nextZ;
         }
     }
-    //printf("\n");
-    //if (change.x) {
-        //int sign = (change.x < 0) ? -1 : 1;
-        //if (chang)
-    //}
+    vec3f realPos = pos;
+    // this part is kind of a mess of variable names so i'm documenting it here
+    // pos gets changed from the negated player position to the position of the cell that we're creating
+    // current isn't the current cell, it's the cell that has already been created in the previous row / column that we're using to get to the cell to be created
+    // next is the cell we're creating, and prev is the cell we most recently created (prev is just used for setting up the doubly linked listiness of the grid)
+    #define isqrt(x) (int)sqrtf((float)x)
     if (change.x < 0) {
         current = corner;
-        if (roughCellDistance2(current, position) < lodCutoffs[0]) {
+        if (roughCellDistance3(current, realPos, 1) < lodCutoffs[0]) {
             for (int i = 0; i > change.x; i--) {
-                row = NULL;
                 prev = NULL;
                 nextRow = NULL;
                 for (; current; current = next) {
@@ -876,15 +1180,24 @@ void updateGrid(vec3f change) {
                     next = createCell(pos, cellSize);
                     if (!nextRow) nextRow = next;
                     if (prev) {
-                        prev->nextZ = current;
-                        current->prevZ = prev;
+                        prev->nextZ = next;
+                        next->prevZ = prev;
                     }
                     current->prevX = next;
                     next->nextX = current;
-                    dist = roughCellDistance(current, position);
+                    dist = roughCellDistance(next, realPos);
                     for (lod = 0; lod < 3 && lodCutoffs[lod] >= dist; lod++);
-                    current->lod = lod;
-                    cellQueue = enqueue(cellQueue, current, dist);
+                    next->lod = lod;
+                    calculateTris(next, terrain);
+                    vec3f treeOffset = {rand() % (int)next->size.x, 0, rand() % (int)next->size.z};
+                    vec3f treePos = add(next->pos, treeOffset);
+                    treePos.y = 0;
+                    float inf = terrain.influenceAt(treePos);
+                    if (inf > 0 && (int)(inf * 37) & 1) {
+                        treePos.y += inf - 0.5;
+                        next->t = genTree(treePos, 0);
+                    }
+                    cellQueue = enqueue(cellQueue, next, isqrt(dist));
                     prev = next;
                     next = current->nextZ;
                 }
@@ -896,10 +1209,9 @@ void updateGrid(vec3f change) {
         current = corner;
         for (; current; current = current->nextX) prev = current;
         current = prev;
-        if (roughCellDistance2(current, position) < lodCutoffs[0]) {
+        if (roughCellDistance3(current, realPos, 1) < lodCutoffs[0]) {
             // different from above
             for (int i = 0; i < change.x; i++) {
-                row = NULL;
                 prev = NULL;
                 nextRow = NULL;
                 for (; current; current = next) {
@@ -909,16 +1221,25 @@ void updateGrid(vec3f change) {
                     next = createCell(pos, cellSize);
                     if (!nextRow) nextRow = next;
                     if (prev) {
-                        prev->nextZ = current;
-                        current->prevZ = prev;
+                        prev->nextZ = next;
+                        next->prevZ = prev;
                     }
                     // different from above
                     current->nextX = next;
                     next->prevX = current;
-                    dist = roughCellDistance(current, position);
+                    dist = roughCellDistance(next, realPos);
                     for (lod = 0; lod < 3 && lodCutoffs[lod] >= dist; lod++);
-                    current->lod = lod;
-                    cellQueue = enqueue(cellQueue, current, dist);
+                    next->lod = lod;
+                    calculateTris(next, terrain);
+                    vec3f treeOffset = {rand() % (int)next->size.x, 0, rand() % (int)next->size.z};
+                    vec3f treePos = add(next->pos, treeOffset);
+                    treePos.y = 0;
+                    float inf = terrain.influenceAt(treePos);
+                    if (inf > 0 && (int)(inf * 37) & 1) {
+                        treePos.y += inf - 0.5;
+                        next->t = genTree(treePos, 0);
+                    }
+                    cellQueue = enqueue(cellQueue, next, isqrt(dist));
                     prev = next;
                     next = current->nextZ;
                 }
@@ -928,9 +1249,8 @@ void updateGrid(vec3f change) {
     }
     if (change.z < 0) {
         current = corner;
-        if (roughCellDistance2(current, position) < lodCutoffs[0]) {
+        if (roughCellDistance3(current, realPos, 0) < lodCutoffs[0]) {
             for (int i = 0; i > change.z; i--) {
-                row = NULL;
                 prev = NULL;
                 nextRow = NULL;
                 for (; current; current = next) {
@@ -939,15 +1259,24 @@ void updateGrid(vec3f change) {
                     next = createCell(pos, cellSize);
                     if (!nextRow) nextRow = next;
                     if (prev) {
-                        prev->nextX = current;
-                        current->prevX = prev;
+                        prev->nextX = next;
+                        next->prevX = prev;
                     }
                     current->prevZ = next;
                     next->nextZ = current;
-                    dist = roughCellDistance(current, position);
+                    dist = roughCellDistance(next, realPos);
                     for (lod = 0; lod < 3 && lodCutoffs[lod] >= dist; lod++);
-                    current->lod = lod;
-                    cellQueue = enqueue(cellQueue, current, dist);
+                    next->lod = lod;
+                    calculateTris(next, terrain);
+                    vec3f treeOffset = {rand() % (int)next->size.x, 0, rand() % (int)next->size.z};
+                    vec3f treePos = add(next->pos, treeOffset);
+                    treePos.y = 0;
+                    float inf = terrain.influenceAt(treePos);
+                    if (inf > 0 && (int)(inf * 37) & 1) {
+                        treePos.y += inf - 0.5;
+                        next->t = genTree(treePos, 0);
+                    }
+                    cellQueue = enqueue(cellQueue, next, isqrt(dist));
                     prev = next;
                     next = current->nextX;
                 }
@@ -959,10 +1288,9 @@ void updateGrid(vec3f change) {
         current = corner;
         for (; current; current = current->nextZ) prev = current;
         current = prev;
-        if (roughCellDistance2(current, position) < lodCutoffs[0]) {
+        if (roughCellDistance3(current, realPos, 0) < lodCutoffs[0]) {
             // different from above
             for (int i = 0; i < change.z; i++) {
-                row = NULL;
                 prev = NULL;
                 nextRow = NULL;
                 for (; current; current = next) {
@@ -972,23 +1300,32 @@ void updateGrid(vec3f change) {
                     next = createCell(pos, cellSize);
                     if (!nextRow) nextRow = next;
                     if (prev) {
-                        prev->nextX = current;
-                        current->prevX = prev;
+                        prev->nextX = next;
+                        next->prevX = prev;
                     }
                     // different from above
                     current->nextZ = next;
                     next->prevZ = current;
-                    dist = roughCellDistance(current, position);
+                    dist = roughCellDistance(next, realPos);
                     for (lod = 0; lod < 3 && lodCutoffs[lod] >= dist; lod++);
-                    current->lod = lod;
-                    cellQueue = enqueue(cellQueue, current, dist);
+                    next->lod = lod;
+                    calculateTris(next, terrain);
+                    vec3f treeOffset = {rand() % (int)next->size.x, 0, rand() % (int)next->size.z};
+                    vec3f treePos = add(next->pos, treeOffset);
+                    treePos.y = 0;
+                    float inf = terrain.influenceAt(treePos);
+                    if (inf > 0 && (int)(inf * 37) & 1) {
+                        treePos.y += inf - 0.5;
+                        next->t = genTree(treePos, 0);
+                    }
+                    cellQueue = enqueue(cellQueue, next, isqrt(dist));
                     prev = next;
-                    next = current->nextZ;
+                    next = current->nextX;
                 }
                 current = nextRow;
             }
         }
-    }//*/
+    }
 }
 
 void idle() {
@@ -1021,7 +1358,11 @@ void idle() {
         if (perspective == 3) {
             vec3f pos = {position.x, position.y - 2, position.z};
             if (terrain.influenceAt(pos) < terrain.threshhold) {
-                acceleration.y += 0.1;
+                if (position.y > 5) {
+                    acceleration.y += 0.05;
+                } else {
+                    acceleration.y += 0.1;
+                }
             }
             shouldRedisplay = 1;
         }
@@ -1075,6 +1416,7 @@ void idle() {
                 velocity = vZero;
             }
         }
+        fps = (59 * fps + (1000 / ((1000.0 / 60.0) + time - oldT))) / 60;
         oldT += 1000 / 60.0;
         if (lightStopped) {
             lightOffset += 1000 / 60.0;
@@ -1084,7 +1426,6 @@ void idle() {
     }
     cell *toRender = peek(cellQueue);
     if (toRender) {
-        //if (cellQueue->priority < 4) printf("currently %f, %f\n", toRender->pos.x, toRender->pos.z);
         cellQueue = pop(cellQueue);
         // avoid re-rendering cells we don't need
         if (toRender->needsRender == 1) {
@@ -1097,6 +1438,11 @@ void idle() {
                 toRender->textureCoords = createArr();
             }
             calculateTris(toRender, terrain);
+            if (toRender->t) {
+                vec3f treePos = toRender->t->pos;
+                deleteTree(toRender->t);
+                toRender->t = genTree(treePos, toRender->lod + 1);
+            }
             shouldRedisplay = 1;
         }
     }
@@ -1138,7 +1484,16 @@ void createGrid(int centerX, int centerZ) {
             dist = roughCellDistance(current, centerPos);
             for (lod = 0; lod < 3 && lodCutoffs[lod] >= dist; lod++);
             current->lod = lod;
-            cellQueue = enqueue(cellQueue, current, dist);
+            calculateTris(current, terrain);
+            vec3f treeOffset = {rand() % (int)current->size.x, 0, rand() % (int)current->size.z};
+            vec3f treePos = add(current->pos, treeOffset);
+            treePos.y = 0;
+            float inf = terrain.influenceAt(treePos);
+            if (inf > 0 && (int)(inf * 37) & 1) {
+                treePos.y += inf - 0.5;
+                current->t = genTree(treePos, 0);
+            }
+            cellQueue = enqueue(cellQueue, current, isqrt(dist));
             pos.x += cellSize.x;
             prev = current;
         }
@@ -1196,13 +1551,23 @@ int main() {
         return 1;
     }
 
-    SDL_GLContext context = SDL_GL_CreateContext(window);
+    //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_DEBUG_FLAG, SDL_TRUE);
+
+    SDL_GL_CreateContext(window);
+    modelView = calloc(16, sizeof(float));
+    projection = calloc(16, sizeof(float));
+    screenSpace = calloc(16, sizeof(float));
     reshape(width, height);
 
     srand(time(NULL));
     oldT = SDL_GetTicks();
     dimInit = dim;
     ID = createProgram("vert.vert", "frag.frag", 1);
+    skyboxID = createProgram("skybox.vert", "skybox.frag", 1);
+    waterID = createProgram("water.vert", "water.frag", 1);
+    treeID = createProgram("tree.vert", "tree.frag", 1);
     for (int i = 0; i < nDodes; i++) {
         dodes[i].rX = rand() % 360;
         dodes[i].rY = rand() % 360;
@@ -1212,15 +1577,63 @@ int main() {
         dodes[i].tZ = (rand() % 400) - 200;
     }
     groundTexture = LoadTexBMP("ground.bmp", GL_NEAREST);
+    snowTexture = LoadTexBMP("snow.bmp", GL_LINEAR);
     crateTexture = LoadTexBMP("crate.bmp", GL_LINEAR);
     sunTexture = LoadTexBMP("sun.bmp", GL_LINEAR);
+    char *skyboxFilePointers[6];
+    for (int i = 0; i < 6; i++) {
+        skyboxFilePointers[i] = skyboxFiles[i];
+    }
+    skyboxTexture = LoadCubemapBMP(skyboxFilePointers, GL_LINEAR);
     textures[0] = crateTexture;
     textures[1] = sunTexture;
     textures[2] = groundTexture;
-    createGrid(0, 0);
-    //terrain = sineHill;
+    // for water
+    glGenFramebuffers(1, &refractionBuffer);
+    glGenTextures(1, &refractionTexture);
+    glGenRenderbuffers(1, &refractionDepth);
+    glBindFramebuffer(GL_FRAMEBUFFER, refractionBuffer);
+    glBindTexture(GL_TEXTURE_2D, refractionTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 800, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, refractionTexture, 0);
+    glBindRenderbuffer(GL_RENDERBUFFER, refractionDepth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 800);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, refractionDepth);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        printf("refraction buffer failed for some reason!\n");
+    }
+    glGenFramebuffers(1, &reflectionBuffer);
+    glGenTextures(1, &reflectionTexture);
+    glGenRenderbuffers(1, &reflectionDepth);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, reflectionBuffer);
+
+    glBindTexture(GL_TEXTURE_2D, reflectionTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 800, 800, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, reflectionTexture, 0);
+    glBindRenderbuffer(GL_RENDERBUFFER, reflectionDepth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 800);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, reflectionDepth);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        printf("reflection buffer failed for some reason!\n");
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    //glEnable(GL_KHR_debug);
+    ErrCheck("setup");
     terrain = perlin;
     setupPerlin();
+    createGrid(0, 0);
+    pos2.y += terrain.influenceAt(pos2);
+    //terrain = sineHill;
+    textInit();
     calculateTris(corner, terrain);
 
     //system("pause");
@@ -1229,7 +1642,7 @@ int main() {
         processEvents();
         if (shouldDisplay) display();
         idle();
-        SDL_Delay(1000 / rate);
+        SDL_Delay(1);
     }
 
     SDL_DestroyWindow(window);

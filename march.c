@@ -340,8 +340,8 @@ vec3f normalAt(vec3f pos, funcDef data) {
 void march(marchData cellData, cell *lists, funcDef data) {
 	float threshhold = data.threshhold;
     int index = 0;
-    vec3f vertexList[12];
-	vec3f normalList[12];
+    vec3f vertexList[12] = {0};
+	vec3f normalList[12] = {0};
     int edges;
     const char *tris;
     vec3f temp, temp1, temp2;
@@ -391,8 +391,23 @@ void march(marchData cellData, cell *lists, funcDef data) {
 	}
 	
 	for (int i = 0; i < 12; i++) {
-		if (vertexList[i].x != 0 || vertexList[i].y != 0 || vertexList[i].z != 0) {
-			normalList[i] = normalAt(vertexList[i], data);
+		vec3f vertex = vertexList[i];
+		if (vertex.x != 0 || vertex.y != 0 || vertex.z != 0) {
+			normalList[i] = normalAt(vertex, data);
+			if (vertex.x < lists->pos.x) {
+				//vertexList[i].y += (lists->pos.x - vertex.x) / 2.0;
+				vertexList[i].y += 0.1;
+			} else if (vertex.x > lists->pos.x + lists->size.x) {
+				//vertexList[i].y += (vertex.x - lists->pos.x - lists->size.x) / 2.0; 
+				vertexList[i].y += 0.1;
+			}
+			if (vertex.z < lists->pos.z) {
+				//vertexList[i].y += (lists->pos.z - vertex.z) / 2.0;
+				vertexList[i].y += 0.1;
+			} else if (vertex.z > lists->pos.z + lists->size.z) {
+				//vertexList[i].y += (vertex.z - lists->pos.z - lists->size.z) / 2.0;
+				vertexList[i].y += 0.1;
+			}
 		}
 	}
 
@@ -408,9 +423,13 @@ void march(marchData cellData, cell *lists, funcDef data) {
             temp1.x, -temp1.y, temp1.z,
 			temp2.x, -temp2.y, temp2.z
         );
-		temp = scalef(sub(temp, cellData.pos), 1.0 / cellData.size);
+		/*temp = scalef(sub(temp, cellData.pos), 1.0 / cellData.size);
 		temp1 = scalef(sub(temp1, cellData.pos), 1.0 / cellData.size);
-		temp2 = scalef(sub(temp2, cellData.pos), 1.0 / cellData.size);
+		temp2 = scalef(sub(temp2, cellData.pos), 1.0 / cellData.size);*/
+		vec3f offset = {fmodf(cellData.pos.x, 1), fmodf(cellData.pos.y, 1), fmodf(cellData.pos.z, 1)};
+		temp = add(sub(temp, cellData.pos), offset);
+		temp1 = add(sub(temp1, cellData.pos), offset);
+		temp2 = add(sub(temp2, cellData.pos), offset);
 		textureCoords = pushMultiple(textureCoords, 6,
 			temp.x, temp.z,
 			temp1.x, temp1.z,

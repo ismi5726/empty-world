@@ -4,9 +4,9 @@
 #include <math.h>
 #include <time.h>
 
-static int p[256];
-static float Gx[256];
-static float Gy[256];
+static int p[256] = {0};
+static float Gx[256] = {0};
+static float Gy[256] = {0};
 
 float noise2(int x, int y, float xf, float yf)
 {

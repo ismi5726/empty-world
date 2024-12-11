@@ -7,6 +7,7 @@
         "glut.h": "c",
         "arr.h": "c",
         "march.h": "c",
-        "loadtexbmp.h": "c"
+        "loadtexbmp.h": "c",
+        "helvetica.h": "c"
     }
 }

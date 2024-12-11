@@ -18,18 +18,57 @@
 
 void calculateTris(cell *ptr, funcDef f) {
     //cell c = *ptr;
+    // getting the actual necessary size of the cell
+    vec3f mask = {1, 0, 1};
+    vec3f rPos = scalev3f(ptr->pos, mask);
+    float min = 1000;
+    float max = -1000;
+    float test;
+    for (float i = 0; i <= 1; i += 0.25) {
+        mask.x = i;
+        for (float j = 0; j <= 1; j += 0.25) {
+            mask.z = j;
+            test = -f.influenceAt(add(rPos, scalev3f(ptr->size, mask)));
+            if (test < min) min = test;
+            if (test > max) max = test;
+        }
+    }
+    float size = max - min;
+    size += 3;
     float step = 4.0 / (1 << ptr->lod);
+    vec3f start = ptr->pos;
+    vec3f stop = add(ptr->pos, ptr->size);
+    int isFirstRender = 0;
+    if (ptr->needsRender & 2) {
+        step = ptr->size.x;
+        ptr->needsRender ^= 2;
+        isFirstRender = 1;
+    } else {
+        ptr->needsRender = 0;
+    }
+        vec3f stepVec = {step, step, step};
+        start = sub(start, stepVec);
+        stop = add(stop, stepVec);
+    size += step - fmodf(size, step);
+    ptr->pos.y = (max + min - size) / 2;
+    start.y = ptr->pos.y;
+    stop.y = ptr->pos.y + size;
+    ptr->size.y = size;
     vec3f areasize = scalef(ptr->size, 1 / step);
-    areasize.x++;areasize.y++;areasize.z++;
+    if (isFirstRender) {
+        //areasize.x++; areasize.y++; areasize.z++;
+    } else {
+    }
+        areasize.x+=3;areasize.y++;areasize.z+=3;
     int arrSize = areasize.x * areasize.y * areasize.z;
     float *influence = calloc(arrSize, sizeof(float));
     int n = 0;
     vec3f pos;
-    for (float z = ptr->pos.z; z <= ptr->pos.z + ptr->size.z; z += step) {
+    for (float z = start.z; z <= stop.z; z += step) {
         pos.z = z;
-        for (float y = ptr->pos.y; y <= ptr->pos.y + ptr->size.y; y += step) {
+        for (float y = start.y; y <= stop.y; y += step) {
             pos.y = y;
-            for (float x = ptr->pos.x; x <= ptr->pos.x + ptr->size.x; x += step) {
+            for (float x = start.x; x <= stop.x; x += step) {
                 pos.x = x;
                 if (n >= arrSize) {
                     printf("warning: influence array not big enough; could not calculate tris!\n");
@@ -43,17 +82,21 @@ void calculateTris(cell *ptr, funcDef f) {
     }
 
     n = 0;
-    for (float z = ptr->pos.z; z < ptr->pos.z + ptr->size.z; z += step) {
+    vec3f isOutside = {0};
+    for (float z = start.z; z < stop.z; z += step) {
         pos.z = z;
-        for (float y = ptr->pos.y; y < ptr->pos.y + ptr->size.y; y += step) {
+        isOutside.z = (z < ptr->pos.z) || (z > ptr->pos.z + ptr->size.z);
+        for (float y = start.y; y < stop.y; y += step) {
             pos.y = y;
-            for (float x = ptr->pos.x; x < ptr->pos.x + ptr->size.x; x += step) {
+            //isOutside.y = (y < ptr->pos.y) || (y > ptr->pos.y + ptr->size.y);
+            for (float x = start.x; x < stop.x; x += step) {
                 pos.x = x;
+                isOutside.x = (x < ptr->pos.x) || (x > ptr->pos.x + ptr->size.x);
                 marchData cellData = {{influence[n], influence[n + 1],
                     influence[n + 1 + (int)areasize.x], influence[n + (int)areasize.x],
                     influence[n + (int)(areasize.x * areasize.y)], influence[n + 1 + (int)(areasize.x * areasize.y)],
                     influence[n + 1 + (int)areasize.x + (int)(areasize.x * areasize.y)], influence[n + (int)areasize.x + (int)(areasize.x * areasize.y)],
-                }, pos, (float)step};
+                }, pos, (float)step, isOutside.x || isOutside.z};
                 n++;
                 march(cellData, ptr, f);
             }
@@ -74,7 +117,7 @@ void calculateTris(cell *ptr, funcDef f) {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     //ErrCheck("calculateTris");
 
-    ptr->needsRender = 0;
+    free(influence);
 }
 
 float cellDistance(cell *ptr, vec3f pos) {
@@ -109,6 +152,11 @@ int roughCellDistance2(cell *ptr, vec3f pos) {
     return (int)((tot.x > tot.z) ? tot.x : tot.z);
 }
 
+int roughCellDistance3(cell *ptr, vec3f pos, int isX) {
+    vec3f tot = scalev3f(vAbs(sub(ptr->pos, pos)), inv(ptr->size));
+    return (int)(isX ? tot.x : tot.z);
+}
+
 vec3f cellPos(vec3f pos) {
     pos = scalef(pos, 1.0 / 16);
     pos.x = (int)pos.x; pos.y = (int)pos.y; pos.z = (int)pos.z;
@@ -133,6 +181,9 @@ void delCell(cell *ptr) {
         c.prevZ->nextZ = NULL;
     }
     glDeleteBuffers(3, ptr->buffers);
+    if (c.t) {
+        deleteTree(c.t);
+    }
     free(ptr);
 }
 
@@ -151,7 +202,7 @@ cell *createCell(vec3f pos, vec3f size) {
     ptr->textureCoords = createArr();
     ptr->pos = pos;
     ptr->size = size;
-    ptr->needsRender = 1;
+    ptr->needsRender = 3;
     glGenBuffers(3, ptr->buffers);
     return ptr;
 }

@@ -17,4 +17,4 @@ walking controls:
 - space to jump
 - click and drag to turn camera
 
-Time taken: 7 hours.
+Skybox taken from https://opengameart.org/content/sky-box-sunny-day (CC-BY 3.0)

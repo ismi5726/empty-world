@@ -22,3 +22,4 @@
 void Fatal(const char* format, ...);
 void ErrCheck(const char *where);
 unsigned int LoadTexBMP(const char *file, int mode);
+unsigned int LoadCubemapBMP(char **file, int mode);
