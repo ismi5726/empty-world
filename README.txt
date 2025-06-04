@@ -1,20 +1,27 @@
-This program is an extension of the previous ones, now with textures! This time, I tried to play around with how to get texture coordinates for different shapes, with the terrain being fairly simply (just plastering the texture on every marched cell, but in a way that's coherent even with large vertical changes), but the dodecahedra being slightly more complicated. The default mode is a sort of naive attempt to force a square texture onto a pentagon, which sort of works, but is missing close to half of the texture, while the second mode changes the way the dodecahedra are rendered to have 5 triangles instead of 3, which allows me to also put the texture on there slightly better. Unfortunately, neither of these modes do a great job of preserving the full texture or visual accuracy with angles, so I've also included a mode that just clips the texture to the pentagon, but especially for something like the crate texture (taken from ex14), where the edges are very important, this isn't ideal, either (although it'd be fine if I was using textures meant for pentagons).
+This project is an extension and addition to a number of things that I have done previously during the assignments. I ended up diverging somewhat from the proposal to focus on things that were more graphics-focused and less "game"-ey.
 
-This version also features some other little fun things like landscape made from perlin noise instead of just a sine wave (original sources for the perlin noise listed at the top of perlin.c), which involved significantly rewriting my movement code due to it apparently being upside down and inverted (as in you were somehow walking on the underside of the function - I don't really get it either), and grassy / dirt terrain as a sort of callback to hw2.
+Here are the controls:
+- WASD to move forward, left, backward, or right, respectively
+- Space to jump
+- Mouse to move (click to focus on the window first)
+- Q to quit
+- Esc to defocus the mouse, or quit if the mouse is not focused
 
-Full controls list:
-- scroll to zoom in / out
-- p to change between the perspectives (ortho, perspective, walking)
-- m to change dodecahedron texture mode
-- t to change dodecahedron texture
-- o to pause the rotation of the lighting
-- 0 to reset scene
-- q / esc to exit
-normal controls:
-- click and drag to rotate the camera around the viewing point
-walking controls:
-- wasd to move
-- space to jump
-- click and drag to turn camera
+Features I've added:
+- Procedurally generated trees, which (as far as I can tell?) use an original, recursive algorithm that seems to produce fairly reasonable results. It's also fast enough to have trees be generated and re-generated at higher detail levels within the level-of-detail generation process, but unfortunately it uses rand(), so the trees will visibly change when chunks are regenerated.
+
+- Water, based on this article: https://medium.com/@vincehnguyen/simplest-way-to-render-pretty-water-in-opengl-7bce40cbefbe, with shader code adapted from https://github.com/moomoo02/Voxel-Engine/blob/main/Shaders/WaterShader.GLSL. It uses 2 framebuffers to render reflections and refractions, respectively, followed by some clever math to get them onto the water plane. I ended up not applying water fog because I couldn't get it to look pretty with all of the gaps in the sides of the world, unfortunately.
+
+- Snow at higher elevations, which is applied per-fragment rather than per-vertex, is able to manipulate the actual terrain in what resembles clumping, and has what I would consider to be a fairly convincing transition from grass.
+
+- Other land types: sand (at lower elevations as the grass goes near the water), stone (underwater)
+
+- Infinite terrain, which additionally has a lot of height variation and should never show any gaps, even between different levels of detail (this is a big improvement from how it used to be)
+
+- A skybox, because it gets kinda boring just looking at a completely black background color all of the time and the water needs something to reflect to look pretty
+
+Although this project doesn't contain everything mentioned in the proposal, I believe I've done a good job of choosing things to implement that demonstrate a mastery of the course material and polishing the things that are here, rather than throwing a bunch of half-baked ideas together.
+
+This project contains a fixed scene, as that best demonstrates the features mentioned above (snow is behind the starting area, up the mountain). It is possible to change this by changing "srand(0)" to "srand(time(NULL))" in the project-1.c file, but that's perhaps more work than you want.
 
 Skybox taken from https://opengameart.org/content/sky-box-sunny-day (CC-BY 3.0)

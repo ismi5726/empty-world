@@ -20,6 +20,7 @@ void deleteTree(tree *t) {
 #define PI 3.14159265358979323846
 #endif
 vec3f randInCircle(vec3f pos, vec3f dir, float scale, float *angle) {
+    (void)pos;
     vec3f perpendicular;
     // taken from https://stackoverflow.com/a/47960392
     if (dir.z != 0) {
@@ -101,9 +102,7 @@ void branchOut(tree *t, branch start, int count, int depth, float angle, float b
     start.dir = norm(add(start.dir, randInCircle(add(start.dir, start.start), start.dir, 0.05 * start.radius, &childAngle)));
 
     if (depth > 0) {
-        //vec3f childDir = add(scalef(start.dir, cosf(angle)), scalef(randInCircle(startPos, start.dir, 1.0), sinf(angle)));
         start.length = startLength * lengthFactor;
-        //start.dir = childDir;
         branchOut(t, start, count > 16 ? count / 8 : 2, depth - 1, angle * 0.9, childSpacing, lengthFactor);
     } else {
         createBranch(t, start, startRadius, depth == 0);
@@ -111,6 +110,7 @@ void branchOut(tree *t, branch start, int count, int depth, float angle, float b
 }
 
 void createBranch(tree *t, branch b, float radius, int isLeaf) {
+    (void)radius;
     vec3f dir = b.dir;
     vec3f perpendicular;
     // taken from https://stackoverflow.com/a/47960392
@@ -169,12 +169,6 @@ void createBranch(tree *t, branch b, float radius, int isLeaf) {
                 0.45, 0.36, 0.26,
                 0.45, 0.36, 0.26,
                 0.45, 0.36, 0.26
-                /*1, 0.75, 0.5,
-                1, 0.75, 0.5,
-                1, 0.75, 0.5,
-                1, 0.75, 0.5,
-                1, 0.75, 0.5,
-                1, 0.75, 0.5*/
             );
         } else {
             t->tree->colors = pushMultiple(t->tree->colors, 18,

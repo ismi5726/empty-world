@@ -12,6 +12,7 @@ out vec4 snowValues;
 out vec3 FragPos;
 out vec3 Normal;
 out vec2 TexCoord;
+out float dist;
 
 float mod289(float x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
 vec4 mod289(vec4 x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
@@ -48,21 +49,18 @@ void main() {
     vec3 snowPos = aPos + vec3(0, 1, 0) * smoothstep(0, 1, snow) * 1.5 * aNormal.y;
     vec4 pos = projection * modelview * vec4(snowPos, 1.0);
     gl_Position = pos;
+    dist = pos.z;
     float prod = aPos.y;
     float PI = 3.1415926;
     vec3 r = (vec3(noise(aPos.xyz), noise(aPos.zxy), noise(aPos.yzx)) - vec3(0.5));
-    //vec3 grassColor = mix(vec3(0.15, 0.8, 0.3) * (vec3(1) + r * vec3(0.2, 1, 0.5)), vec3(1, 1, 1), step(0, snow));
     vec3 grassColor = vec3(0.15, 0.8, 0.3) * (vec3(1) + r * vec3(0.2, 1, 0.5));
     vec3 materialColor = mix(vec3(0.76, 0.7, 0.5) * (vec3(1) + r / 8), grassColor, vec3(smoothstep(0, 1, aPos.y + 0.5)));
     materialColor = mix(vec3(0.5, 0.5, 0.5), materialColor, vec3(smoothstep(0, 1, aPos.y + 3.5)));
     vertexColor = vec4(materialColor, 1.0);
     Normal = aNormal;
     TexCoord = aTexCoord;
-    //vec3 floorPos = floor(aPos);
     vec3 floorPos = aPos - vec3(0.5, 0, 0.5);
     snowValues = vec4(snowValue(floorPos), snowValue(floorPos + vec3(1, 0, 0)), snowValue(floorPos + vec3(1, 0, 1)), snowValue(floorPos + vec3(0, 0, 1)));
-    //FragPos = vec3(modelview * vec4(aPos, 1.0));
     FragPos = vec3(aPos.x, -aPos.y, aPos.z);
-    //gl_ClipDistance[0] = mix((aPos.y + plane.w) * plane.y, 1.0, step(0.1, abs(plane.w)));
     gl_ClipDistance[0] = mix(1, (aPos.y + plane.w) * plane.y, step(-1, abs(plane.w)));
 }

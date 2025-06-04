@@ -4,6 +4,7 @@ in vec4 snowValues;
 in vec3 FragPos;
 in vec3 Normal;
 in vec2 TexCoord;
+in float dist;
 
 out vec4 FragColor;
 
@@ -17,16 +18,9 @@ void main() {
     vec4 dirtColor = texture(groundSampler, TexCoord);
     vec4 snowColor = texture(snowSampler, TexCoord);
     float rx = fract(FragPos.x);
-    /*float snow = mix(
-        mix(snowValues.x, snowValues.y, rx),
-        mix(snowValues.w, snowValues.z, rx),
-        fract(FragPos.z)
-    );*/
     float snow = snowValues.x;
     vec4 groundColor = mix(dirtColor, snowColor, step(0, snow));
     vec4 snowMixedColor = mix(vertexColor, vec4(1.0), step(0, snow));
-    //vec4 groundColor = mix(dirtColor, snowColor, smoothstep(0.7, 0.9, vertexColor.b));
-    //vec4 groundColor = texe
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(lightPos + FragPos);
     float specularFactor = 1.15 - vertexColor.r;
@@ -44,7 +38,10 @@ void main() {
     float distance = length(lightPos + FragPos);
     float attenuation = 1.0 / (1 + 0.022 * distance + 0.0019 * distance * distance);
 
+    vec4 fogColor = vec4(mix(vec4(0, 0.03, 0.5, 1.0), vec4(1.0, 1.0, 1.0, 1.0), step(0, lightPos.y)));
+    float fogStart = mix(10, 240, step(0, lightPos.y));
+    float f = clamp((320 - dist) / (320 - fogStart), 0.0, 1.0);
+
     vec3 result = (attenuation * (diffuse + specular + ambient) + ambient) * snowMixedColor.xyz * groundColor.xyz;
-    //vec3 result = vec3(groundColor.x, TexCoord.xy);
     FragColor = vec4(result, 1.0);
 }

@@ -21,4 +21,3 @@ typedef struct objectInstance {
 object *createObject();
 void genObject(object *ptr);
 void deleteObject(object *obj);
-object *chairGen();

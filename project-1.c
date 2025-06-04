@@ -232,7 +232,6 @@ void reshape(int w,int h) {
 }
 
 void mouse(int button, int up, int x, int y) {
-    printf("%i %i\n", button, up);
     // if it's one of the 3 main buttons, just set it to down
     // no buffer-overflow weirdness here !
     if (button < 3 && button >= 0) {
@@ -255,14 +254,6 @@ void motion(int x, int y) {
         warp = 0;
         return;
     }
-    // we still want to keep track of the mouse even when it's outside of the window to keep dragging smooth
-    /*if (!isInside) {
-        mouseX = x;
-        mouseY = y;
-        return;
-    }*/
-    //double dX = x - mouseX;
-    //double dY = y - mouseY;
     double dX = x;
     double dY = y;
     double adjSensitivity = sensitivity / (double) width;
@@ -278,8 +269,6 @@ void motion(int x, int y) {
         setProjection();
         shouldRedisplay = 1;
     }
-    //mouseX = x;
-    //mouseY = y;
     SDL_WarpMouseInWindow(window, width / 2, height / 2);
     if (shouldRedisplay) {
         glutPostRedisplay();
@@ -393,7 +382,6 @@ void processEvents() {
                 quitProgram(0);
                 break;
             case SDL_WINDOWEVENT:
-                //printf("%i, %i, %i\n", event.window.data1, event.window.data2, event.window.event);
                 switch (event.window.event) {
                     case SDL_WINDOWEVENT_RESIZED:
                         reshape(event.window.data1, event.window.data2);
@@ -409,9 +397,6 @@ void processEvents() {
             case SDL_MOUSEBUTTONUP:
                 mouse(event.button.button - 1, 1, event.button.x, event.button.y);
                 break;
-            case SDL_MOUSEWHEEL:
-                mouse((event.wheel.y < 0) + 3, 0, event.wheel.mouseX, event.wheel.mouseY);
-                break;
             case SDL_KEYDOWN:
                 key(event.key.keysym.sym, 0, 0);
                 break;
@@ -419,282 +404,6 @@ void processEvents() {
                 keyUp(event.key.keysym.sym, 0, 0);
         }
     }
-}
-
-void dodecahedron() {
-    double phi = (1 + sqrt(5)) / 2;
-    float coords[] = {
-        1, 1, 1,
-        1, 1, -1,
-        1, -1, 1,
-        1, -1, -1,
-        -1, 1, 1,
-        -1, 1, -1,
-        -1, -1, 1,
-        -1, -1, -1,
-        0, phi, 1/phi,
-        0, phi, -1/phi,
-        0, -phi, 1/phi,
-        0, -phi, -1/phi,
-        1/phi, 0, phi,
-        1/phi, 0, -phi,
-        -1/phi, 0, phi,
-        -1/phi, 0, -phi,
-        phi, 1/phi, 0,
-        phi, -1/phi, 0,
-        -phi, 1/phi, 0,
-        -phi, -1/phi, 0
-    };
-    float faceTexture[] = {
-        0, 1, 0,
-        1, 0, 0,
-        1, 1, 0,
-        0, 1, 0,
-        1, 0, 0,
-        0, 0.75, 0,
-        1, 0, 0,
-        0.75, 0, 0,
-        0, 0.75, 0,
-    };
-    float faceTexture2[] = {
-        0.5, 1, 0,
-        1, 1, 0,
-        1, 0, 0,
-        0, 0, 0,
-        0, 1, 0,
-        0.5, 0.5, 0,
-    };
-    float faceTexture3[] = {
-        0, 1 / phi, 0,
-        1, 1 / phi, 0,
-        0.5, 1, 0,
-        0, 1 / phi, 0,
-        1, 1 / phi, 0,
-        1 - phi / 2, 0, 0,
-        1, 1 / phi, 0,
-        phi / 2, 0, 0,
-        1 - phi / 2, 0, 0,
-    };
-    char faces[] = {
-        0, 1, 16, 0, 1, 8, 1, 9, 8,
-        1, 3, 13, 1, 3, 16, 3, 17, 16, 
-        3, 2, 17, 3, 2, 11, 2, 10, 11,
-        0, 2, 12, 0, 2, 16, 2, 17, 16,
-        4, 5, 18, 4, 5, 8, 5, 9, 8, 
-        5, 7, 15, 5, 7, 18, 7, 19, 18,
-        7, 6, 19, 7, 6, 11, 6, 10, 11, 
-        4, 6, 14, 4, 6, 18, 6, 19, 18, 
-        0, 4, 8, 0, 4, 12, 4, 14, 12,
-        1, 5, 9, 1, 5, 13, 5, 15, 13, 
-        6, 2, 10, 6, 2, 14, 2, 12, 14,
-        7, 3, 11, 7, 3, 15, 3, 13, 15 
-    };
-    // the faces from above, after having been sorted around their centers and de-duplicated
-    // sorted using algorithm from https://stackoverflow.com/a/47956568
-    char faces2[] = {
-        16,0,8,9,1,
-        13,3,17,16,1,
-        17,3,11,10,2,
-        12,0,16,17,2,
-        18,5,9,8,4,
-        15,5,18,19,7,
-        19,6,10,11,7,
-        14,6,19,18,4,
-        0,12,14,4,8,
-        9,5,15,13,1,
-        10,6,14,12,2,
-        11,3,13,15,7,
-    };
-    // colors adapted from ex6.c
-    float colors[] = {
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 0.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 1.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 0.0
-    };
-
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glEnableClientState(GL_NORMAL_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    vec3f v[180] = {0};
-    vec3f n[180] = {0};
-    vec3f t[180] = {0};
-    vec3f c[180] = {0};
-    if (mode == 1) {
-        const int f = 108 * 15 / 9;
-        int k = 0;
-        for (int i = 0; i < 60; i += 5) {
-            vec3f v1 = vec3fInArray(coords, faces2[i] * 3);
-            vec3f v2 = vec3fInArray(coords, faces2[i + 1] * 3);
-            vec3f v3 = vec3fInArray(coords, faces2[i + 2] * 3);
-            vec3f v4 = vec3fInArray(coords, faces2[i + 3] * 3);
-            vec3f v5 = vec3fInArray(coords, faces2[i + 4] * 3);
-            vec3f normal = cross(sub(v2, v1), sub(v3, v1));
-            vec3f center = scalef(add(add(add(v1, v2), add(v3, v4)), v5), 1.0 / 5.0);
-            vec3f vecs[5] = {v1, v2, v3, v4, v5};
-            for (int j = 0; j < 5; j++) {
-                v[k] = vecs[j];
-                c[k] = vec3fInArray(colors, i * 27 / 5);
-                t[k] = vec3fInArray(faceTexture2, ((j) % 5) * 3);
-                n[k++] = normal;
-                c[k] = vec3fInArray(colors, i * 27 / 5);
-                t[k] = vec3fInArray(faceTexture2, ((j + 1) % 5) * 3);
-                v[k] = vecs[(j + 1) % 5];
-                n[k++] = normal;
-                c[k] = vec3fInArray(colors, i * 27 / 5);
-                t[k] = vec3fInArray(faceTexture2, 5 * 3);
-                v[k] = center;
-                n[k++] = normal;
-            }
-        }
-
-        glVertexPointer(3, GL_FLOAT, 0, v);
-        glColorPointer(3, GL_FLOAT, 0, c);
-        glNormalPointer(GL_FLOAT, 0, n);
-        glTexCoordPointer(3, GL_FLOAT, 0, t);
-        glShadeModel(GL_SMOOTH);
-        glDrawArrays(GL_TRIANGLES, 0, f);
-    } else {
-        const int f = 108;
-        float *ft = mode ? faceTexture3 : faceTexture;
-        for (int i = 0; i < f; i+=3) {
-            vec3f v1 = vec3fInArray(coords, faces[i] * 3);
-            vec3f v2 = vec3fInArray(coords, faces[i + 1] * 3);
-            vec3f v3 = vec3fInArray(coords, faces[i + 2] * 3);
-            vec3f normal = cross(sub(v2, v1), sub(v3, v1));
-            v[i] = v1;
-            n[i] = normal;
-            v[i + 1] = v2;
-            n[i + 1] = normal;
-            v[i + 2] = v3;
-            n[i + 2] = normal;
-            int j = i % 9;
-            vec3f texCoords;
-            texCoords = vec3fInArray(ft, j++ * 3);
-            t[i] = texCoords;
-            texCoords = vec3fInArray(ft, j++ * 3);
-            t[i + 1] = texCoords;
-            texCoords = vec3fInArray(ft, j++ * 3);
-            t[i + 2] = texCoords;
-        }
-
-        glVertexPointer(3, GL_FLOAT, 0, v);
-        glColorPointer(3, GL_FLOAT, 0, colors);
-        glNormalPointer(GL_FLOAT, 0, n);
-        glTexCoordPointer(3, GL_FLOAT, 0, t);
-        glShadeModel(GL_SMOOTH);
-        glDrawArrays(GL_TRIANGLES, 0, f);
-    }
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
 void drawGrid() {
@@ -802,6 +511,8 @@ void drawSkybox() {
     ErrCheck("skybox-end");
 }
 
+void drawTree();
+
 void drawWater() {
     int aboveWater = position.y > -5 ? 1 : -1;
     glEnable(GL_CLIP_DISTANCE0);
@@ -810,7 +521,7 @@ void drawWater() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    glViewport(0, 0, 800, 800);
+    glViewport(0, 0, 1024, 1024);
     glUseProgram(ID);
     glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
     glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, modelView);
@@ -823,12 +534,10 @@ void drawWater() {
     glRotated(-phi, -1, 0, 0);
     glRotated(theta, 0, -1, 0);
     glTranslatef(position.x, position.y + 6, position.z);
-    //glTranslatef(0, 2 * position.y + 6, 0);
     glGetFloatv(GL_PROJECTION_MATRIX, projection);
     glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, projection);
     glMatrixMode(GL_MODELVIEW);
     glUniform4f(glGetUniformLocation(ID, "plane"), 0, aboveWater, 0, aboveWater == 1 ? 1 : 0.5);
-    //glEnable(GL_CULL_FACE);
     vec3f lightPos = position;
     lightPos.y += 4;
     glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
@@ -841,23 +550,19 @@ void drawWater() {
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
-    //glColor3f(1, 0, 1);
-    //print2D(5, 5, "Hello", 48);
-    //printf("%i\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
 
     glBindFramebuffer(GL_FRAMEBUFFER, refractionBuffer);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    glViewport(0, 0, 800, 800);
+    glViewport(0, 0, 1024, 1024);
     glUseProgram(ID);
     glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
     glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, modelView);
     glGetFloatv(GL_PROJECTION_MATRIX, projection);
     glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, projection);
     glUniform4f(glGetUniformLocation(ID, "plane"), 0, -aboveWater, 0, aboveWater == 1 ? 0.5 : 1.5);
-    //glEnable(GL_CULL_FACE);
     glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
     drawGrid();
     glDisable(GL_CULL_FACE);
@@ -871,7 +576,6 @@ void drawWater() {
     float rot2[16];
     glPushMatrix();
     glLoadIdentity();
-    //double bottom = tan(60 * 3.14159/360.0) * 0.01;
     glFrustum(-asp * bottom, asp * bottom, -bottom, bottom, 0.01, 4);
     glRotated(phi, -1, 0, 0);
     glRotated(theta, 0, -1, 0);
@@ -904,43 +608,11 @@ void drawWater() {
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glDisableClientState(GL_VERTEX_ARRAY);
     glUseProgram(0);
-    ErrCheck("water-end");//*/
-    /*ErrCheck("water");
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, reflectionBuffer);
-    glBlitFramebuffer(0, 0, 800, 800, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);//*/
+    ErrCheck("water-end");
     glDisable(GL_POLYGON_OFFSET_FILL);
 }
 
 void drawTree() {
-    /*glUseProgram(treeID);
-    glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
-    glUniformMatrix4fv(glGetUniformLocation(treeID, "modelview"), 1, GL_FALSE, modelView);
-    glGetFloatv(GL_PROJECTION_MATRIX, projection);
-    glUniformMatrix4fv(glGetUniformLocation(treeID, "projection"), 1, GL_FALSE, projection);
-    glUniform4f(glGetUniformLocation(treeID, "plane"), 0, 0, 0, 0);
-    vec3f lightPos = position;
-    lightPos.y += 4;
-    glUniform3fv(glGetUniformLocation(treeID, "lightPos"), 1, (float *)&lightPos);
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glEnableVertexAttribArray(2);
-    glBindBuffer(GL_ARRAY_BUFFER, t->tree->buffers[0]);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, t->tree->buffers[1]);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 0, 0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, t->tree->buffers[2]);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-    glDrawArrays(GL_TRIANGLES, 0, t->tree->vertices.size / 3);
-    ErrCheck("drawGrid");
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(2);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);*/
     cell *row = corner, *current;
     glUseProgram(treeID);
     glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
@@ -995,7 +667,6 @@ void display() {
     }
 
     ErrCheck("display2");
-    //float *matrix = calloc(16, sizeof(float));
     glUseProgram(ID);
     glGetFloatv(GL_MODELVIEW_MATRIX, modelView);
     glUniformMatrix4fv(glGetUniformLocation(ID, "modelview"), 1, GL_FALSE, modelView);
@@ -1003,101 +674,17 @@ void display() {
     glUniformMatrix4fv(glGetUniformLocation(ID, "projection"), 1, GL_FALSE, projection);
     glUniform4f(glGetUniformLocation(ID, "plane"), 0, 0, 0, 0);
     ErrCheck("display1");
-    //free(matrix);
-    // don't cull backfaces when looking around from afar (looks awkward)
-    //glEnable(GL_CULL_FACE);
     vec3f lightPos = position;
     lightPos.y += 4;
     glUniform3fv(glGetUniformLocation(ID, "lightPos"), 1, (float *)&lightPos);
-    //glEnable(GL_POLYGON_OFFSET_FILL);
-    //glPolygonOffset(1, 10);
     drawGrid();
-    glDisable(GL_CULL_FACE);
     drawWater();
-    //drawSomething();
 
     glUseProgram(0);
 
     drawTree();
     
-    // much of this part of the code comes from ex13.c
-    float a = 0.2;
-    float amb[4] = {a, a, a, 1};
-    float d = 1;
-    float dif[4] = {d, d, d, 1};
-    float s = 0.5;
-    float spc[4] = {s, s, s, 1};
-    float white[4] = {1.0, 1.0, 1.0, 1.0};
-    float t = oldT - lightOffset;
-    vec3f posVec = {0};
-    if (perspective > 1) {
-        vec3f temp = {-position.x, position.y + 4, -position.z};
-        posVec = temp;
-    } else {
-        vec3f temp = {cosf(t / 2000) * 300, 6, sinf(t / 2000) * 300};
-        posVec = temp;
-        glPushMatrix();
-        glTranslatef(temp.x, temp.y, temp.z);
-        glRotatef(cosf(t / 2000), 1, 0, 0);
-        glRotatef(sinf(t / 3000), 0, 1, 1);
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, sunTexture);
-        //dodecahedron();
-        glDisable(GL_TEXTURE_2D);
-        glPopMatrix();
-    }
-    float pos[4] = {posVec.x, posVec.y, posVec.z, 1};
-    glEnable(GL_NORMALIZE);
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    glEnable(GL_COLOR_MATERIAL);
-
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 0);
-    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
-    //glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, yellow);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, white);
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32);
-    glLightfv(GL_LIGHT0, GL_AMBIENT, amb);
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, dif);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, spc);
-
-    if (perspective > 1) {
-        // makes this roughly equal to the terrain, except the dodes are shinier
-        glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0);
-        glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.022);
-        glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.0019);
-    }
-
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, textures[textureIndex]);
-    glLightfv(GL_LIGHT0, GL_POSITION, pos);
-    for (int i = 0; i < nDodes; i++) {
-        glPushMatrix();
-        glTranslatef(dodes[i].tX, 0, dodes[i].tZ);
-        glScalef(dodes[i].scale, dodes[i].scale, dodes[i].scale);
-        if (perspective < 2) {
-            float tempPos[4] = {pos[0] - dodes[i].tX, pos[1], pos[2] - dodes[i].tZ, pos[3]};
-            glLightfv(GL_LIGHT0, GL_POSITION, tempPos);
-        }
-        glRotatef(dodes[i].rX, 1, 0, 0);
-        glRotatef(dodes[i].rY, 0, 1, 0);
-        glRotatef(dodes[i].rZ, 0, 0, 1);
-        //dodecahedron();
-        glPopMatrix();
-    }
-    glLightfv(GL_LIGHT0, GL_POSITION, pos);
-    glShadeModel(GL_FLAT);
-    //dodecahedron();
-    glDisable(GL_TEXTURE_2D);
     drawSkybox();
-
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_LIGHT0);
-    glDisable(GL_COLOR_MATERIAL);
-    glDisable(GL_NORMALIZE);
-    //dodecahedron();
 
     glLoadIdentity();
     glMatrixMode(GL_PROJECTION);
@@ -1108,6 +695,7 @@ void display() {
     glColor4f(1, 1, 1, 1);
     print2D(5, 5, state[perspective], 20);
     char posPrint[50];
+    vec3f posVec = {-position.x, position.y + 4, -position.z};
     sprintf(posPrint, "x: %i, y: %i, z: %i", (int)posVec.x, (int)posVec.y, (int)posVec.z);
     print2D(5, 30, posPrint, 20);
     sprintf(posPrint, "FPS: %f", fps);
@@ -1551,17 +1139,14 @@ int main() {
         return 1;
     }
 
-    //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    //SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_DEBUG_FLAG, SDL_TRUE);
-
     SDL_GL_CreateContext(window);
     modelView = calloc(16, sizeof(float));
     projection = calloc(16, sizeof(float));
     screenSpace = calloc(16, sizeof(float));
     reshape(width, height);
 
-    srand(time(NULL));
+    //srand(time(NULL));
+    srand(0);
     oldT = SDL_GetTicks();
     dimInit = dim;
     ID = createProgram("vert.vert", "frag.frag", 1);
@@ -1578,8 +1163,6 @@ int main() {
     }
     groundTexture = LoadTexBMP("ground.bmp", GL_NEAREST);
     snowTexture = LoadTexBMP("snow.bmp", GL_LINEAR);
-    crateTexture = LoadTexBMP("crate.bmp", GL_LINEAR);
-    sunTexture = LoadTexBMP("sun.bmp", GL_LINEAR);
     char *skyboxFilePointers[6];
     for (int i = 0; i < 6; i++) {
         skyboxFilePointers[i] = skyboxFiles[i];
@@ -1594,12 +1177,12 @@ int main() {
     glGenRenderbuffers(1, &refractionDepth);
     glBindFramebuffer(GL_FRAMEBUFFER, refractionBuffer);
     glBindTexture(GL_TEXTURE_2D, refractionTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 800, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1024, 1024, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, refractionTexture, 0);
     glBindRenderbuffer(GL_RENDERBUFFER, refractionDepth);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 800);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1024, 1024);
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, refractionDepth);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -1612,31 +1195,27 @@ int main() {
     glBindFramebuffer(GL_FRAMEBUFFER, reflectionBuffer);
 
     glBindTexture(GL_TEXTURE_2D, reflectionTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 800, 800, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1024, 1024, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, reflectionTexture, 0);
     glBindRenderbuffer(GL_RENDERBUFFER, reflectionDepth);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 800);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1024, 1024);
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, reflectionDepth);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         printf("reflection buffer failed for some reason!\n");
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    //glEnable(GL_KHR_debug);
     ErrCheck("setup");
     terrain = perlin;
     setupPerlin();
     createGrid(0, 0);
     pos2.y += terrain.influenceAt(pos2);
-    //terrain = sineHill;
     textInit();
     calculateTris(corner, terrain);
-
-    //system("pause");
 
     while (1) {
         processEvents();

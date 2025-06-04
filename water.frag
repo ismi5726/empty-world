@@ -1,5 +1,6 @@
 #version 330 core
 // https://medium.com/@vincehnguyen/simplest-way-to-render-pretty-water-in-opengl-7bce40cbefbe
+// https://github.com/moomoo02/Voxel-Engine/blob/main/Shaders/WaterShader.GLSL
 in vec4 fullPos;
 in vec4 halfPos;
 in vec3 eye;
@@ -40,15 +41,13 @@ void main() {
     vec2 modifiedCoords = (fullPos.xy / fullPos.w) / 2.0 + 0.5;
 
     vec2 reflectCoords = vec2(modifiedCoords.x, -modifiedCoords.y);
-    //vec2 reflectCoords = vec2(modifiedCoords.x, modifiedCoords.y);
     vec2 refractCoords = vec2(modifiedCoords.x, modifiedCoords.y);
-//*
-    vec2 distortion = vec2(noise(halfPos.zxy / 3 + vec3(time / 500.0, 0, 0)), noise(halfPos.yzx)) * 0.01;
+
+    vec2 distortion = vec2(noise(halfPos.zxy / 3 + vec3(time / 300.0, 0, 0)), noise(halfPos.yzx)) * 0.01;
 
     reflectCoords += distortion;
     reflectCoords.x = clamp(reflectCoords.x, 0.001, 0.999);
     reflectCoords.y = clamp(reflectCoords.y, -0.999, -0.001);
-    //reflectCoords = clamp(reflectCoords, 0.001, 0.999);
 
     refractCoords += distortion;
     refractCoords = clamp(refractCoords, 0.001, 0.999);
@@ -61,11 +60,4 @@ void main() {
 
     FragColor = mix(reflectColor, refractColor, refractFactor);
     FragColor = mix(FragColor, vec4(0.0, 0.03, 0.5, 1.0), 0.1);
-    //FragColor = vec4(0.0, 0.0, 0.0, 1.0);//*/
-    /*vec4 e = texture(refractionTexture, refractCoords);
-    vec4 f = texture(reflectionTexture, reflectCoords);
-    //FragColor = f;
-    FragColor = e;
-    //FragColor = vec4(0.0, 0.03, 0.5, 1.0);*/
-
 }

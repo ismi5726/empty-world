@@ -37,8 +37,3 @@ void deleteObject(object *obj) {
     delArr(obj->normals);
     free(obj);
 }
-
-object *chairGen() {
-    object *chair = createObject();
-    
-}
