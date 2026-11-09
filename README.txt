@@ -7,6 +7,16 @@ Here are the controls:
 - Q to quit
 - Esc to defocus the mouse, or quit if the mouse is not focused
 
+Build instructions:
+Required dependencies: opengl, glu, sdl2
+To run:
+make
+./project
+
+To delete:
+make clean
+(only tested on linux)
+
 Features I've added:
 - Procedurally generated trees, which (as far as I can tell?) use an original, recursive algorithm that seems to produce fairly reasonable results. It's also fast enough to have trees be generated and re-generated at higher detail levels within the level-of-detail generation process, but unfortunately it uses rand(), so the trees will visibly change when chunks are regenerated.
 
